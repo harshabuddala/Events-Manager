@@ -27,7 +27,7 @@ echo "  → Database is ready!"
 
 # ─── Run Prisma Migrations ──────────────────────────────────────────────────
 echo "[2/4] Running database migrations..."
-if npx prisma migrate deploy --schema=./prisma/schema.prisma; then
+if node ./node_modules/prisma/build/index.js migrate deploy --schema=./prisma/schema.prisma; then
   echo "  → Migrations applied successfully!"
 else
   echo "  → WARNING: Migration failed. Attempting to continue..."
@@ -48,7 +48,7 @@ USER_COUNT=$(node -e "
 
 if [ "$USER_COUNT" = "0" ]; then
   echo "  → Database is empty, running seed..."
-  if npx prisma db seed --schema=./prisma/schema.prisma; then
+  if node ./node_modules/prisma/build/index.js db seed --schema=./prisma/schema.prisma; then
     echo "  → Seed completed!"
   else
     echo "  → WARNING: Seed failed. You may need to seed manually."
