@@ -5,3 +5,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+/generated/prisma
+
+certificates
+/certs

@@ -1,0 +1,109 @@
+# =============================================================================
+# Docker Compose for Dokploy Deployment
+# Edunura Events Manager - Next.js 15 + PostgreSQL + Prisma
+#
+# Deploy in Dokploy:
+#   1. Create a new Compose service in your Dokploy project
+#   2. Paste this file in the "Raw" tab under General
+#   3. Add environment variables in the Environment tab (see below)
+#   4. Configure your domain in the Domain tab or use Traefik labels
+#   5. Hit Deploy
+#
+# Required Environment Variables (add in Dokploy Environment tab):
+#   DATABASE_URL=postgresql://edunura:${POSTGRES_PASSWORD}@edunura-db:5432/edunura
+#   JWT_SECRET=<generate-a-strong-random-secret>
+#   POSTGRES_PASSWORD=<generate-a-strong-password>
+#   POSTGRES_USER=edunura
+#   POSTGRES_DB=edunura
+#   NODE_ENV=production
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  edunura-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - edunura-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Next.js Application
+  # ---------------------------------------------------------------------------
+  edunura-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      edunura-db:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@edunura-db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 8472
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8472/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.edunura.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.edunura.entrypoints=websecure"
+      - "traefik.http.routers.edunura.tls.certResolver=letsencrypt"
+      - "traefik.http.services.edunura.loadbalancer.server.port=8472"
+
+  # ---------------------------------------------------------------------------
+  # Prisma Migration Runner (runs once on deploy, then exits)
+  # Uncomment below if you want automatic migrations on each deploy.
+  # Note: Dokploy may handle this differently — test before enabling.
+  # ---------------------------------------------------------------------------
+  # edunura-migrate:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   restart: "no"
+  #   depends_on:
+  #     edunura-db:
+  #       condition: service_healthy
+  #   networks:
+  #     - dokploy-network
+  #   environment:
+  #     NODE_ENV: production
+  #     DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@edunura-db:5432/${POSTGRES_DB}
+  #     JWT_SECRET: ${JWT_SECRET}
+  #   command: ["npx", "prisma", "migrate", "deploy"]
+  #   profiles:
+  #     - migrate
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  edunura-db-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  dokploy-network:
+    external: true

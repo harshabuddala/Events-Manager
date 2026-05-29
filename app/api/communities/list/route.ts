@@ -1,0 +1,22 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getSession } from '@/lib/auth'
+
+export async function GET() {
+  try {
+    const session = await getSession()
+    if (!session || session.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const communities = await prisma.community.findMany({
+      select: { id: true, name: true, code: true, location: true },
+      orderBy: { name: 'asc' },
+    })
+
+    return NextResponse.json({ communities })
+  } catch (error) {
+    console.error('Fetch communities error:', error instanceof Error ? error.message : 'Unknown')
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

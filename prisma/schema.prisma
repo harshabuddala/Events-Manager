@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  VOLUNTEER
+}
+
+enum CommunityStatus {
+  ACTIVE
+  UPCOMING
+  INACTIVE
+}
+
+enum EventStatus {
+  UPCOMING
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum StallStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum VolunteerRole {
+  VOLUNTEER
+  LEAD_EVALUATOR
+  COORDINATOR
+}
+
+enum VolunteerStatus {
+  AVAILABLE
+  ASSIGNED
+  ON_LEAVE
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATED
+  PRINTED
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  name        String
+  role        UserRole @default(ADMIN)
+  phoneNumber String?
+  avatar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  organizedEvents Event[] @relation("EventOrganizer")
+
+  @@map("users")
+}
+
+model Community {
+  id            String         @id @default(uuid())
+  code          String         @unique
+  name          String
+  location      String
+  zone          String?
+  status        CommunityStatus @default(ACTIVE)
+  contactPerson String
+  contactEmail  String?
+  contactPhone  String?
+  description   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  events Event[]
+
+  @@map("communities")
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  name        String
+  communityId String
+  organizerId String
+  date        DateTime
+  endDate     DateTime?
+  status      EventStatus @default(UPCOMING)
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  community     Community            @relation(fields: [communityId], references: [id])
+  organizer     User                 @relation("EventOrganizer", fields: [organizerId], references: [id])
+  registrations Registration[]
+  stalls        Stall[]
+  assignments   VolunteerAssignment[]
+
+  @@map("events")
+}
+
+model Student {
+  id           String  @id @default(uuid())
+  rollNumber   String  @unique
+  name         String
+  grade        String
+  age          Int?
+  email        String?
+  phoneNumber  String?
+  parentName   String?
+  parentEmail  String?
+  parentPhone  String?
+  dateOfBirth  DateTime?
+  address      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  registrations Registration[]
+  stallVisits   StallVisit[]
+  reportCards   ReportCard[]
+
+  @@map("students")
+}
+
+model Registration {
+  id               String             @id @default(uuid())
+  registrationCode String             @unique
+  eventId          String
+  studentId        String
+  status           RegistrationStatus @default(REGISTERED)
+  registeredAt     DateTime           @default(now())
+  completedAt      DateTime?
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  // Relations
+  event      Event       @relation(fields: [eventId], references: [id])
+  student    Student     @relation(fields: [studentId], references: [id])
+  stallVisits StallVisit[]
+
+  @@unique([eventId, studentId])
+  @@map("registrations")
+}
+
+model Stall {
+  id            String      @id @default(uuid())
+  code          String      @unique
+  name          String
+  description   String?
+  icon          String?
+  maxVolunteers Int         @default(5)
+  status        StallStatus @default(ACTIVE)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  events      Event[]
+  assignments VolunteerAssignment[]
+  stallVisits StallVisit[]
+
+  @@map("stalls")
+}
+
+model Volunteer {
+  id             String          @id @default(uuid())
+  name           String
+  email          String          @unique
+  password       String
+  phoneNumber    String?
+  role           VolunteerRole   @default(VOLUNTEER)
+  preferredStall String?
+  rating         Float?
+  totalEvents    Int             @default(0)
+  status         VolunteerStatus @default(AVAILABLE)
+  avatar         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relations
+  assignments  VolunteerAssignment[]
+  performances Performance[]
+
+  @@map("volunteers")
+}
+
+model VolunteerAssignment {
+  id          String   @id @default(uuid())
+  eventId     String
+  stallId     String
+  volunteerId String
+  assignedAt  DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  event     Event     @relation(fields: [eventId], references: [id])
+  stall     Stall     @relation(fields: [stallId], references: [id])
+  volunteer Volunteer @relation(fields: [volunteerId], references: [id])
+
+  @@unique([eventId, stallId, volunteerId])
+  @@map("volunteer_assignments")
+}
+
+model StallVisit {
+  id             String   @id @default(uuid())
+  registrationId String
+  stallId        String
+  studentId      String
+  visitedAt      DateTime @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  registration Registration @relation(fields: [registrationId], references: [id])
+  stall        Stall        @relation(fields: [stallId], references: [id])
+  student      Student      @relation(fields: [studentId], references: [id])
+  performance  Performance?
+
+  @@unique([registrationId, stallId])
+  @@map("stall_visits")
+}
+
+model Performance {
+  id              String   @id @default(uuid())
+  stallVisitId    String   @unique
+  volunteerId     String
+  score           Float
+  grade           String
+  remarks         String?
+  participation   Int      @default(1)
+  creativity      Int?
+  problemSolving  Int?
+  communication   Int?
+  learningAbility Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  stallVisit StallVisit @relation(fields: [stallVisitId], references: [id])
+  volunteer  Volunteer  @relation(fields: [volunteerId], references: [id])
+
+  @@map("performances")
+}
+
+model ReportCard {
+  id             String       @id @default(uuid())
+  reportCode     String       @unique
+  studentId      String
+  eventId        String?
+  totalScore     Float
+  overallGrade   String
+  topSkill       String?
+  skillsAssessed Int          @default(0)
+  status         ReportStatus @default(PENDING)
+  generatedAt    DateTime?
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@map("report_cards")
+}

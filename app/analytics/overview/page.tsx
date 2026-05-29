@@ -1,34 +1,52 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area, Legend
+  AreaChart, Area, Legend
 } from 'recharts';
 import { TrendingUp, Users, Target, Activity, Calendar } from 'lucide-react';
 
-const visitTrends = [
-  { time: '09:00', curr: 120, prev: 90 },
-  { time: '10:00', curr: 250, prev: 180 },
-  { time: '11:00', curr: 380, prev: 290 },
-  { time: '12:00', curr: 450, prev: 350 },
-  { time: '13:00', curr: 520, prev: 420 },
-  { time: '14:00', curr: 380, prev: 300 },
-  { time: '15:00', curr: 420, prev: 340 },
-  { time: '16:00', curr: 310, prev: 240 },
-];
-
-const completionByGrade = [
-  { grade: '1st', math: 85, science: 78, language: 92 },
-  { grade: '2nd', math: 82, science: 81, language: 88 },
-  { grade: '3rd', math: 88, science: 85, language: 85 },
-  { grade: '4th', math: 79, science: 89, language: 82 },
-  { grade: '5th', math: 84, science: 92, language: 79 },
-  { grade: '6th', math: 91, science: 88, language: 85 },
-];
+interface AnalyticsData {
+  stats: {
+    totalVisits: number;
+    avgCompletion: number;
+    activeStalls: number;
+    communities: number;
+  };
+  visitTrends: Array<{ time: string; visits: number }>;
+  performanceByGrade: Array<{
+    grade: string;
+    creativity: number;
+    problemSolving: number;
+    communication: number;
+    learningAbility: number;
+  }>;
+}
 
 export default function AnalyticsOverviewPage() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/analytics/overview')
+      .then(res => res.json())
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Analytics Overview" subtitle="Loading analytics data...">
+        <div className="text-center py-12 text-slate-500">Loading analytics...</div>
+      </DashboardLayout>
+    );
+  }
+
+  const stats = data?.stats || { totalVisits: 0, avgCompletion: 0, activeStalls: 0, communities: 0 };
+
   return (
     <DashboardLayout 
       title="Analytics Overview"
@@ -51,9 +69,9 @@ export default function AnalyticsOverviewPage() {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-2xl font-bold text-slate-900 tracking-tight">8,452</p>
+              <p className="text-2xl font-bold text-slate-900 tracking-tight">{stats.totalVisits.toLocaleString()}</p>
               <p className="text-xs font-semibold text-emerald-500 mt-1 flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +12.5% from last week
+                <TrendingUp className="w-3 h-3" /> Stall visits tracked
               </p>
             </div>
           </div>
@@ -68,9 +86,9 @@ export default function AnalyticsOverviewPage() {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-2xl font-bold text-slate-900 tracking-tight">84.2%</p>
+              <p className="text-2xl font-bold text-slate-900 tracking-tight">{stats.avgCompletion}%</p>
               <p className="text-xs font-semibold text-emerald-500 mt-1 flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +3.1% from last week
+                <TrendingUp className="w-3 h-3" /> Visits completed
               </p>
             </div>
           </div>
@@ -85,7 +103,7 @@ export default function AnalyticsOverviewPage() {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-2xl font-bold text-slate-900 tracking-tight">24</p>
+              <p className="text-2xl font-bold text-slate-900 tracking-tight">{stats.activeStalls}</p>
               <p className="text-xs font-medium text-slate-500 mt-1">
                 Running concurrently
               </p>
@@ -102,7 +120,7 @@ export default function AnalyticsOverviewPage() {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-2xl font-bold text-slate-900 tracking-tight">12</p>
+              <p className="text-2xl font-bold text-slate-900 tracking-tight">{stats.communities}</p>
               <p className="text-xs font-medium text-slate-500 mt-1">
                 Participating societies
               </p>
@@ -117,32 +135,27 @@ export default function AnalyticsOverviewPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-[15px] font-bold text-slate-800">Visit Trends</h3>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5">Current vs Previous Week traffic</p>
+              <p className="text-[11px] font-medium text-slate-500 mt-0.5">Daily stall visit counts</p>
             </div>
           </div>
           <div className="h-[280px]">
              <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={visitTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart data={data?.visitTrends || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorCurr" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#7C3AED" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorPrev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} allowDecimals={false} />
                 <RechartsTooltip 
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Area type="monotone" name="Current Week" dataKey="curr" stroke="#7C3AED" strokeWidth={3} fillOpacity={1} fill="url(#colorCurr)" />
-                <Area type="monotone" name="Last Week" dataKey="prev" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fillOpacity={1} fill="url(#colorPrev)" />
+                <Area type="monotone" name="Stall Visits" dataKey="visits" stroke="#7C3AED" strokeWidth={3} fillOpacity={1} fill="url(#colorVisits)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -153,23 +166,24 @@ export default function AnalyticsOverviewPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-[15px] font-bold text-slate-800">Performance By Grade</h3>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5">Average scores across main subjects</p>
+              <p className="text-[11px] font-medium text-slate-500 mt-0.5">Average scores across skill dimensions</p>
             </div>
           </div>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={completionByGrade} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={data?.performanceByGrade || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis dataKey="grade" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} domain={[0, 100]} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} domain={[0, 10]} />
                 <RechartsTooltip 
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   cursor={{fill: '#f8fafc'}}
                 />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="math" name="Mathematics" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="science" name="Science" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="language" name="Languages" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={12} />
+                <Bar dataKey="creativity" name="Creativity" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={12} />
+                <Bar dataKey="problemSolving" name="Problem Solving" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} />
+                <Bar dataKey="communication" name="Communication" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={12} />
+                <Bar dataKey="learningAbility" name="Learning Ability" fill="#ec4899" radius={[4, 4, 0, 0]} barSize={12} />
               </BarChart>
             </ResponsiveContainer>
           </div>
