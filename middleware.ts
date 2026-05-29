@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
-import { randomUUID } from 'crypto'
 
 const publicPaths = ['/']
 const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
@@ -8,7 +7,7 @@ const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  const nonce = Buffer.from(randomUUID()).toString('base64')
+  const nonce = btoa(crypto.randomUUID())
   const isDev = process.env.NODE_ENV === 'development'
 
   const response = NextResponse.next({
