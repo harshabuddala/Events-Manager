@@ -293,3 +293,59 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Only ADMIN and MANAGER can delete registrations
+    if (session.role !== 'ADMIN' && session.role !== 'MANAGER') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const { id: eventId } = await params
+    const body = await request.json()
+    const { registrationId } = body
+
+    if (!registrationId || typeof registrationId !== 'string') {
+      return NextResponse.json({ error: 'registrationId is required' }, { status: 400 })
+    }
+
+    // Verify the registration exists and belongs to this event
+    const registration = await prisma.registration.findFirst({
+      where: { id: registrationId, eventId },
+      include: { stallVisits: true }
+    })
+
+    if (!registration) {
+      return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
+    }
+
+    // Delete in transaction: performances -> stallVisits -> registration
+    await prisma.$transaction(async (tx) => {
+      const stallVisitIds = registration.stallVisits.map(sv => sv.id)
+      if (stallVisitIds.length > 0) {
+        await tx.performance.deleteMany({
+          where: { stallVisitId: { in: stallVisitIds } }
+        })
+        await tx.stallVisit.deleteMany({
+          where: { id: { in: stallVisitIds } }
+        })
+      }
+      await tx.registration.delete({
+        where: { id: registrationId }
+      })
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Delete registration error:', error instanceof Error ? error.message : 'Unknown')
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+

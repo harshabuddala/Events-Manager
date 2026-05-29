@@ -11,7 +11,7 @@ import {
   Calendar, Users, ArrowLeft, Plus, X, Link2, UserPlus,
   CheckCircle2, Clock, AlertCircle, ShoppingBag, UserCheck,
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
-  Star, Send, Award
+  Star, Send, Award, Trash2
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -348,6 +348,50 @@ export default function EventDetailPage() {
     });
     setEditError('');
     setShowEditModal(true);
+  };
+
+  const handleDeleteRegistration = async (registrationId: string) => {
+    if (!confirm('Are you sure you want to delete this registration? This will remove all associated stall visits and scores.')) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}/registrations`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationId }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        alert(error.error || 'Failed to delete registration');
+        return;
+      }
+      // Remove from local state
+      setRegistrations(prev => prev.filter(r => r.id !== registrationId));
+      // Update event count
+      setEvent((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          _count: {
+            ...prev._count,
+            registrations: Math.max(0, prev._count.registrations - 1)
+          }
+        };
+      });
+      // Update analytics if loaded
+      setAnalytics((prev: any) => {
+        if (!prev) return prev;
+        const totalRegs = Math.max(0, prev.summary.totalRegs - 1);
+        return {
+          ...prev,
+          summary: {
+            ...prev.summary,
+            totalRegs,
+          }
+        };
+      });
+    } catch (error) {
+      console.error('Failed to delete registration:', error);
+      alert('Failed to delete registration');
+    }
   };
 
   if (isLoading) {
@@ -1004,13 +1048,22 @@ export default function EventDetailPage() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {canManageEvent && (
-                            <button
-                              onClick={() => openEditModal(reg)}
-                              title="Edit Student Details"
-                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => openEditModal(reg)}
+                                title="Edit Student Details"
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRegistration(reg.id)}
+                                title="Delete Registration"
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() => openQrModal(reg)}
