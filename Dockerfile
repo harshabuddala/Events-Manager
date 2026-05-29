@@ -4,15 +4,16 @@
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# Stage 1: Install dependencies
+# Stage 1: Install dependencies (cached unless package files change)
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
+# Copy only package files first (rarely changes = better cache)
 COPY package.json package-lock.json ./
-COPY prisma ./prisma/
 
+# Install dependencies (cached unless package files change)
 RUN npm ci --prefer-offline
 
 # ---------------------------------------------------------------------------
@@ -22,12 +23,27 @@ FROM node:22-alpine AS builder
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
+# Copy node_modules from deps stage (cached unless deps stage changed)
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Copy Prisma schema first (changes less frequently than app code)
+COPY prisma ./prisma/
 
 # Generate Prisma Client (dummy DATABASE_URL required by Prisma 7.x config)
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
+
+# Copy remaining files needed for build (app code, configs, etc.)
+# This layer invalidates on app code changes, but deps + prisma are already cached
+COPY next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs ./
+COPY app ./app/
+COPY lib ./lib/
+COPY hooks ./hooks/
+COPY middleware.ts ./
+COPY public ./public/ 2>/dev/null || true
 
 # Build Next.js (standalone output)
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -75,7 +91,7 @@ ENV PORT=8472
 ENV HOSTNAME="0.0.0.0"
 
 # Health check hits the /api/health endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
   CMD curl -f http://localhost:8472/api/health || exit 1
 
 ENTRYPOINT ["./entrypoint.sh"]

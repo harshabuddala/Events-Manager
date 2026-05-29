@@ -68,6 +68,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache
+      cache_to:
+        - type=local,dest=/tmp/.buildx-cache-new,mode=max
     restart: unless-stopped
     depends_on:
       edunura-db:
@@ -84,8 +88,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8472/api/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 120s
     deploy:
       resources:
         limits:
