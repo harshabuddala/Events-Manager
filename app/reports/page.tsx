@@ -145,7 +145,7 @@ export default function ReportCardsPage() {
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status & Date</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Final Grade</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Highlights</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[140px]">Actions</th>
+                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[140px] sticky right-0 bg-white z-10">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -215,7 +215,7 @@ export default function ReportCardsPage() {
                         <span className="text-xs italic text-slate-400">Awaiting evaluations...</span>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-5 py-4 text-right sticky right-0 bg-white z-10">
                       <div className="flex items-center justify-end gap-2">
                          {report.status === 'generated' ? (
                            <>

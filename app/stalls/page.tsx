@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import StallFormModal from '@/app/components/StallFormModal';
 import { 
-  Plus, MoreVertical, Star, Trash2
+  Plus, MoreVertical, Star, Trash2, Loader2
 } from 'lucide-react';
 
 interface Stall {
@@ -24,7 +24,7 @@ export default function StallsPage() {
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuState, setMenuState] = useState<{id: string; top: number; left: number} | null>(null);
 
   const fetchStalls = useCallback(async () => {
     try {
@@ -95,24 +95,73 @@ export default function StallsPage() {
         </button>
       }
     >
+      {/* Backdrop for action menu */}
+      {menuState && (
+        <div className="fixed inset-0 z-20" onClick={() => setMenuState(null)} />
+      )}
+
+      {/* Floating action menu */}
+      {menuState && (
+        <div
+          className="fixed z-30 w-36 bg-white border border-slate-200 rounded-lg shadow-xl py-1"
+          style={{ top: menuState.top, left: menuState.left }}
+        >
+          <button
+            onClick={() => { handleDelete(menuState.id); setMenuState(null); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete
+          </button>
+        </div>
+      )}
+
       {/* Stalls Grid */}
       {isLoading ? (
-        <div className="text-center py-12 text-slate-500">Loading stalls...</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-5 animate-pulse">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-slate-200 shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-28 bg-slate-200 rounded" />
+                  <div className="h-3 w-20 bg-slate-100 rounded" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pb-4 border-b border-slate-100">
+                <div className="space-y-2">
+                  <div className="h-3 w-12 bg-slate-100 rounded" />
+                  <div className="h-5 w-10 bg-slate-200 rounded" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-3 w-16 bg-slate-100 rounded" />
+                  <div className="h-5 w-14 bg-slate-200 rounded" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-4">
+                <div className="h-5 w-16 bg-slate-200 rounded-full" />
+                <div className="h-3 w-12 bg-slate-100 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
           {stalls.map((stall) => (
             <div key={stall.id} className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] hover:shadow-lg hover:-translate-y-1 transition-all duration-300 p-5 flex flex-col relative group">
               <div className="absolute top-4 right-4 z-10">
-                <button onClick={() => setOpenMenuId(openMenuId === stall.id ? null : stall.id)} className="p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-700 rounded-md transition-colors">
+                <button
+                  onClick={(e) => {
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    setMenuState(menuState?.id === stall.id ? null : {
+                      id: stall.id,
+                      top: rect.bottom + 4,
+                      left: rect.right - 144,
+                    });
+                  }}
+                  className="p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-700 rounded-md transition-colors"
+                >
                   <MoreVertical className="w-4 h-4" />
                 </button>
-                {openMenuId === stall.id && (
-                  <div className="absolute right-0 top-8 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1">
-                    <button onClick={() => { handleDelete(stall.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50">
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </button>
-                  </div>
-                )}
               </div>
 
               <div className="flex items-center gap-3 mb-4">

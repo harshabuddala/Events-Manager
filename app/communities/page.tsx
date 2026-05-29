@@ -5,7 +5,7 @@ import DashboardLayout from '@/app/components/DashboardLayout';
 import CommunityFormModal from '@/app/components/CommunityFormModal';
 import { 
   MapPin, Search, 
-  MoreVertical, ArrowRight, Building2, CheckCircle2, AlertCircle, Plus, Trash2, Edit2
+  MoreVertical, ArrowRight, Building2, CheckCircle2, AlertCircle, Plus, Trash2, Edit2, Loader2
 } from 'lucide-react';
 
 interface Community {
@@ -30,7 +30,7 @@ export default function CommunitiesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuState, setMenuState] = useState<{id: string; top: number; left: number} | null>(null);
 
   const fetchCommunities = useCallback(async () => {
     try {
@@ -156,25 +156,83 @@ export default function CommunitiesPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
+      {/* Backdrop for action menu */}
+      {menuState && (
+        <div className="fixed inset-0 z-20" onClick={() => setMenuState(null)} />
+      )}
+
+      {/* Floating action menu */}
+      {menuState && (
+        <div
+          className="fixed z-30 w-40 bg-white border border-slate-200 rounded-lg shadow-xl py-1"
+          style={{ top: menuState.top, left: menuState.left }}
+        >
+          <button
+            onClick={() => {
+              const community = communities.find(c => c.id === menuState.id);
+              if (community) { setEditingCommunity(community); setIsModalOpen(true); }
+              setMenuState(null);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <Edit2 className="w-3.5 h-3.5" /> Edit
+          </button>
+          <button
+            onClick={() => { handleDelete(menuState.id); setMenuState(null); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
         <div className="overflow-x-auto">
-          <table className="w-full text-left whitespace-nowrap min-w-[800px]">
+          <table className="w-full text-left min-w-[800px] border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[35%]">Community Details</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Events</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[80px]">Actions</th>
+              <tr className="border-b border-slate-200">
+                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[35%] bg-slate-50/80">Community Details</th>
+                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-50/80">Status</th>
+                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right bg-slate-50/80">Events</th>
+                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[80px] bg-slate-50/80">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">Loading...</td></tr>
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-5 py-4">
+                      <div className="flex gap-3 items-center">
+                        <div className="w-10 h-10 rounded-lg bg-slate-200 shrink-0" />
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-16 bg-slate-200 rounded" />
+                            <div className="h-4 w-32 bg-slate-200 rounded" />
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="h-3 w-40 bg-slate-100 rounded" />
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200 rounded-full" /></td>
+                    <td className="px-5 py-4 text-right"><div className="h-4 w-8 bg-slate-200 rounded ml-auto" /></td>
+                    <td className="px-5 py-4 text-right"><div className="h-4 w-4 bg-slate-200 rounded ml-auto" /></td>
+                  </tr>
+                ))
               ) : filteredCommunities.length === 0 ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">No communities found.</td></tr>
+                <tr>
+                  <td colSpan={4} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <Building2 className="w-8 h-8 text-slate-300" />
+                      <p className="text-sm font-medium text-slate-500">No communities found</p>
+                      <p className="text-xs text-slate-400">Try adjusting your search or filters</p>
+                    </div>
+                  </td>
+                </tr>
               ) : (
                 filteredCommunities.map((community) => (
-                  <tr key={community.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <tr key={community.id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100">
                     <td className="px-5 py-4">
                       <div className="flex gap-3 items-center">
                         <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
@@ -197,22 +255,20 @@ export default function CommunitiesPage() {
                     <td className="px-5 py-4 text-right">
                       <span className="text-sm font-bold text-slate-800">{community.eventsHosted}</span>
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="relative inline-block">
-                        <button onClick={() => setOpenMenuId(openMenuId === community.id ? null : community.id)} className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-md transition-colors">
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                        {openMenuId === community.id && (
-                          <div className="absolute right-0 top-8 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
-                            <button onClick={() => { setEditingCommunity(community); setIsModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-                              <Edit2 className="w-3.5 h-3.5" /> Edit
-                            </button>
-                            <button onClick={() => { handleDelete(community.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50">
-                              <Trash2 className="w-3.5 h-3.5" /> Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setMenuState(menuState?.id === community.id ? null : {
+                            id: community.id,
+                            top: rect.bottom + 4,
+                            left: rect.right - 160,
+                          });
+                        }}
+                        className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))

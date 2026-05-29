@@ -211,7 +211,7 @@ export default function VolunteersPage() {
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status / Stall</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Password</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Performance</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[80px]">Actions</th>
+                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[80px] sticky right-0 bg-white z-10">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -300,10 +300,10 @@ export default function VolunteersPage() {
                         </span>
                       </div>
                     </td>
-                     <td className="px-5 py-4 text-right">
+                     <td className="px-5 py-4 text-right sticky right-0 bg-white z-10">
                        <div className="flex items-center justify-end gap-2">
-                           {canManageVolunteers ? (
-                             <>
+                            {canManageVolunteers ? (
+                              <>
                                <button
                                  onClick={() => setQrLoginVolunteer(vol)}
                                  className="p-1.5 text-slate-400 hover:bg-violet-50 hover:text-violet-600 rounded-md transition-colors"

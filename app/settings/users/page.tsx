@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import UserFormModal from '@/app/components/UserFormModal';
-import { Search, Plus, MoreHorizontal, UserCheck, UserX, Shield, ShieldAlert, Trash2, Edit2 } from 'lucide-react';
+import { Search, Plus, MoreHorizontal, UserCheck, UserX, Shield, ShieldAlert, Trash2, Edit2, Loader2 } from 'lucide-react';
 
 interface User {
   id: string;
@@ -21,7 +21,7 @@ export default function UsersAndRolesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuState, setMenuState] = useState<{id: string; top: number; left: number} | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -162,34 +162,80 @@ export default function UsersAndRolesPage() {
           <span>Volunteers: {users.filter(u => u.role === 'VOLUNTEER').length}</span>
         </div>
 
+        {/* Backdrop for action menu */}
+        {menuState && (
+          <div className="fixed inset-0 z-20" onClick={() => setMenuState(null)} />
+        )}
+
+        {/* Floating action menu */}
+        {menuState && (
+          <div
+            className="fixed z-30 w-40 bg-white border border-slate-200 rounded-lg shadow-xl py-1"
+            style={{ top: menuState.top, left: menuState.left }}
+          >
+            <button
+              onClick={() => {
+                const user = users.find(u => u.id === menuState.id);
+                if (user) { setEditingUser(user); setIsModalOpen(true); }
+                setMenuState(null);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              <Edit2 className="w-3.5 h-3.5" /> Edit User
+            </button>
+            <button
+              onClick={() => { handleDeleteUser(menuState.id); setMenuState(null); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete User
+            </button>
+          </div>
+        )}
+
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50/50 text-slate-500 font-semibold text-xs uppercase tracking-wider">
-              <tr>
+          <table className="w-full text-left text-sm min-w-[600px] border-collapse">
+            <thead className="bg-slate-50/80 text-slate-500 font-semibold text-xs uppercase tracking-wider">
+              <tr className="border-b border-slate-200">
                 <th className="px-5 py-4">User</th>
                 <th className="px-5 py-4">Role</th>
                 <th className="px-5 py-4 hidden md:table-cell">Phone</th>
                 <th className="px-5 py-4 hidden lg:table-cell">Created</th>
-                <th className="px-5 py-4 text-right">Actions</th>
+                <th className="px-5 py-4 text-right w-[80px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                    Loading users...
-                  </td>
-                </tr>
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-slate-200 shrink-0" />
+                        <div className="space-y-1.5">
+                          <div className="h-4 w-28 bg-slate-200 rounded" />
+                          <div className="h-3 w-36 bg-slate-100 rounded" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200 rounded" /></td>
+                    <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
+                    <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 w-20 bg-slate-200 rounded" /></td>
+                    <td className="px-5 py-4 text-right"><div className="h-4 w-4 bg-slate-200 rounded ml-auto" /></td>
+                  </tr>
+                ))
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                    No users found matching your search.
+                  <td colSpan={5} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <UserCheck className="w-8 h-8 text-slate-300" />
+                      <p className="text-sm font-medium text-slate-500">No users found</p>
+                      <p className="text-xs text-slate-400">Try adjusting your search or filters</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={user.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-600 shrink-0">
@@ -215,34 +261,20 @@ export default function UsersAndRolesPage() {
                     <td className="px-5 py-4 hidden lg:table-cell text-slate-500 font-medium">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="relative inline-block">
-                        <button 
-                          onClick={() => setOpenMenuId(openMenuId === user.id ? null : user.id)}
-                          className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                        
-                        {openMenuId === user.id && (
-                          <div className="absolute right-0 top-8 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1">
-                            <button
-                              onClick={() => { setEditingUser(user); setIsModalOpen(true); setOpenMenuId(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                              Edit User
-                            </button>
-                            <button
-                              onClick={() => { handleDeleteUser(user.id); setOpenMenuId(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Delete User
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setMenuState(menuState?.id === user.id ? null : {
+                            id: user.id,
+                            top: rect.bottom + 4,
+                            left: rect.right - 160,
+                          });
+                        }}
+                        className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))

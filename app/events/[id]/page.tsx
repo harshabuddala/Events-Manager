@@ -1046,7 +1046,7 @@ export default function EventDetailPage() {
                             <span className="text-[10px] text-slate-400 italic">No visits</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 bg-white pr-1">
+                        <div className="flex items-center gap-2 shrink-0 sticky right-0 bg-white pl-2 pr-1 z-10">
                           {canManageEvent && (
                             <>
                               <button
