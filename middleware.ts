@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 
 const publicPaths = ['/']
-const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/api/health', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
+const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
