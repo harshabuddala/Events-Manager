@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
+import { randomUUID } from 'crypto'
 
 const publicPaths = ['/']
 const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
@@ -7,8 +8,18 @@ const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Add security headers to all responses
-  const response = NextResponse.next()
+  const nonce = Buffer.from(randomUUID()).toString('base64')
+  const isDev = process.env.NODE_ENV === 'development'
+
+  const response = NextResponse.next({
+    request: {
+      headers: new Headers({
+        ...Object.fromEntries(request.headers.entries()),
+        'x-nonce': nonce,
+      }),
+    },
+  })
+
   response.headers.set('X-Frame-Options', 'SAMEORIGIN')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
@@ -17,14 +28,13 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
 
-  // CSP — allow inline styles for Tailwind, unsafe-inline for dev compatibility
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https: http:",
+    "img-src 'self' blob: data:",
     "font-src 'self' data:",
-    "connect-src 'self' ws: wss: http: https:",
+    "connect-src 'self' ws: wss:",
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -33,16 +43,13 @@ export async function middleware(request: NextRequest) {
 
   const isPublic = publicPaths.includes(pathname) || publicPrefixes.some(p => pathname.startsWith(p))
 
-  // Get the auth token from cookies
   const token = request.cookies.get('auth-token')?.value
   const user = token ? await verifyToken(token) : null
 
-  // If unauthenticated and trying to access protected route, redirect to login
   if (!isPublic && !user) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // If authenticated and trying to access login page, redirect to dashboard
   if (pathname === '/' && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }

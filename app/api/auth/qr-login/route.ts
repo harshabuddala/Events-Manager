@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, setSession, createAutoLoginToken } from '@/lib/auth'
-
-// In-memory token store for QR login (dev only — use Redis in production)
-// Maps token -> { userId, userType, expiresAt }
-const qrLoginTokens = new Map<string, { userId: string; userType: 'user' | 'volunteer'; expiresAt: number }>()
-
-// Clean up expired tokens every 60 seconds
-setInterval(() => {
-  const now = Date.now()
-  for (const [token, data] of qrLoginTokens.entries()) {
-    if (data.expiresAt < now) {
-      qrLoginTokens.delete(token)
-    }
-  }
-}, 60000)
+import { randomBytes } from 'crypto'
 
 /**
- * POST /api/auth/qr-login/generate
+ * POST /api/auth/qr-login
  * Generates a temporary QR login token for the currently logged-in user.
  * Token expires in 5 minutes.
  */
@@ -28,36 +15,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if target user is specified
     const bodyText = await request.text()
     const body = bodyText ? JSON.parse(bodyText) : {}
     const { targetUserId, targetUserType } = body
 
-    // Generate a random token (32 chars hex)
-    const token = Array.from({ length: 32 }, () =>
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('')
+    const token = randomBytes(32).toString('hex')
+
+    let userId = session.id
+    let userType: 'user' | 'volunteer' = 'user'
 
     if (targetUserId && targetUserType) {
-      // Must be an admin or manager to generate for someone else
       if (!['ADMIN', 'MANAGER'].includes(session.role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
-      qrLoginTokens.set(token, {
-        userId: targetUserId,
-        userType: targetUserType,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      })
+      userId = targetUserId
+      userType = targetUserType
     } else {
-      // Determine if this is a user or volunteer
       const isVolunteer = ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR'].includes(session.role)
-
-      qrLoginTokens.set(token, {
-        userId: session.id,
-        userType: isVolunteer ? 'volunteer' : 'user',
-        expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
-      })
+      userType = isVolunteer ? 'volunteer' : 'user'
     }
+
+    await prisma.authToken.create({
+      data: {
+        token,
+        type: 'QR_LOGIN',
+        userId,
+        userType,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+    })
 
     return NextResponse.json({ token })
   } catch (error) {
@@ -67,9 +53,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/auth/qr-login/validate?token=xyz
+ * GET /api/auth/qr-login?token=xyz
  * Validates a QR login token and returns user info.
- * Called by the scanner to check if token is valid before logging in.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -80,15 +65,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Token required' }, { status: 400 })
     }
 
-    const data = qrLoginTokens.get(token)
-    if (!data || data.expiresAt < Date.now()) {
+    const tokenRecord = await prisma.authToken.findFirst({
+      where: {
+        token,
+        type: 'QR_LOGIN',
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    })
+
+    if (!tokenRecord) {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
     }
 
-    // Look up user/volunteer
-    if (data.userType === 'volunteer') {
+    if (tokenRecord.userType === 'volunteer') {
       const volunteer = await prisma.volunteer.findUnique({
-        where: { id: data.userId },
+        where: { id: tokenRecord.userId },
         select: { id: true, name: true, email: true, role: true },
       })
       if (!volunteer) {
@@ -105,7 +97,7 @@ export async function GET(request: NextRequest) {
       })
     } else {
       const user = await prisma.user.findUnique({
-        where: { id: data.userId },
+        where: { id: tokenRecord.userId },
         select: { id: true, name: true, email: true, role: true },
       })
       if (!user) {
@@ -128,7 +120,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT /api/auth/qr-login/validate
+ * PUT /api/auth/qr-login
  * Consumes the token and creates a session (actual login).
  */
 export async function PUT(request: NextRequest) {
@@ -140,17 +132,35 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Token required' }, { status: 400 })
     }
 
-    const data = qrLoginTokens.get(token)
-    if (!data || data.expiresAt < Date.now()) {
+    const result = await prisma.authToken.updateMany({
+      where: {
+        token,
+        type: 'QR_LOGIN',
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        consumedAt: new Date(),
+      },
+    })
+
+    if (result.count === 0) {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
     }
 
-    // Look up and create session
+    const tokenRecord = await prisma.authToken.findUnique({
+      where: { token },
+    })
+
+    if (!tokenRecord) {
+      return NextResponse.json({ error: 'Token not found' }, { status: 404 })
+    }
+
     let userPayload: { id: string; email: string; name: string; role: string } | null = null
 
-    if (data.userType === 'volunteer') {
+    if (tokenRecord.userType === 'volunteer') {
       const volunteer = await prisma.volunteer.findUnique({
-        where: { id: data.userId },
+        where: { id: tokenRecord.userId },
         select: { id: true, name: true, email: true, role: true },
       })
       if (volunteer) {
@@ -158,7 +168,7 @@ export async function PUT(request: NextRequest) {
       }
     } else {
       const user = await prisma.user.findUnique({
-        where: { id: data.userId },
+        where: { id: tokenRecord.userId },
         select: { id: true, name: true, email: true, role: true },
       })
       if (user) {
@@ -170,10 +180,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Consume token (one-time use)
-    qrLoginTokens.delete(token)
-
-    // Create session and auto-login token
     await setSession(userPayload)
     const autoLoginToken = await createAutoLoginToken(userPayload)
 

@@ -2,8 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { compare } from 'bcryptjs'
 import { createToken } from '@/lib/auth'
+import { loginRateLimiter } from '@/lib/rate-limiter'
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  return forwarded?.split(',')[0]?.trim() || '127.0.0.1'
+}
 
 export async function POST(request: NextRequest) {
+  const clientIp = getClientIp(request)
+
+  try {
+    await loginRateLimiter.consume(`volunteer:${clientIp}`)
+  } catch {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please try again later.' },
+      { status: 429 }
+    )
+  }
+
   try {
     let body: { email?: string; password?: string } = {}
     try {

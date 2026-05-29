@@ -90,8 +90,8 @@ echo "  ║  Email:    admin@edunura.com                         ║"
 if [ -n "$ADMIN_PASSWORD" ]; then
   echo "  ║  Password: [set via ADMIN_PASSWORD env var]          ║"
 else
-  echo "  ║  Password: admin123                                  ║"
-  echo "  ║  ⚠️  Change this immediately after first login!     ║"
+  echo "  ║  Password: [auto-generated - check seed output]      ║"
+  echo "  ║  ⚠️  Set ADMIN_PASSWORD env var for next deploy!    ║"
 fi
 echo "  ╚══════════════════════════════════════════════════════╝"
 echo ""

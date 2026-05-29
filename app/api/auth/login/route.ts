@@ -3,18 +3,11 @@ import { prisma } from '@/lib/prisma'
 import { setSession } from '@/lib/auth'
 import { compare } from 'bcryptjs'
 import { z } from 'zod'
-import { RateLimiterMemory } from 'rate-limiter-flexible'
+import { loginRateLimiter } from '@/lib/rate-limiter'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
-})
-
-// In-memory rate limiter: 5 attempts per IP per 15 minutes
-const rateLimiter = new RateLimiterMemory({
-  keyPrefix: 'login_fail',
-  points: 5,
-  duration: 15 * 60,
 })
 
 function getClientIp(request: NextRequest): string {
@@ -26,7 +19,7 @@ export async function POST(request: NextRequest) {
   const clientIp = getClientIp(request)
 
   try {
-    await rateLimiter.consume(clientIp)
+    await loginRateLimiter.consume(clientIp)
   } catch {
     return NextResponse.json(
       { error: 'Too many login attempts. Please try again later.' },

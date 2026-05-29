@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  serverExternalPackages: ['@prisma/client', 'prisma'],
   images: {
     remotePatterns: [
       {

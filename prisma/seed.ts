@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaClient } from '../generated/prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { hash } from 'bcryptjs'
+import { randomBytes } from 'crypto'
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
 const prisma = new PrismaClient({ adapter })
@@ -9,23 +10,49 @@ const prisma = new PrismaClient({ adapter })
 async function main() {
   console.log('Seeding database...')
 
-  // Clean existing data
-  await prisma.performance.deleteMany()
-  await prisma.stallVisit.deleteMany()
-  await prisma.volunteerAssignment.deleteMany()
-  await prisma.reportCard.deleteMany()
-  await prisma.registration.deleteMany()
-  await prisma.stall.deleteMany()
-  await prisma.volunteer.deleteMany()
-  await prisma.student.deleteMany()
-  await prisma.event.deleteMany()
-  await prisma.community.deleteMany()
-  await prisma.user.deleteMany()
+  const isProduction = process.env.NODE_ENV === 'production'
+  const shouldClean = process.env.SEED_CLEAN === 'true'
 
-  console.log('Cleaned existing data')
+  if (shouldClean) {
+    console.log('SEED_CLEAN=true: Cleaning existing data...')
+    await prisma.performance.deleteMany()
+    await prisma.stallVisit.deleteMany()
+    await prisma.volunteerAssignment.deleteMany()
+    await prisma.reportCard.deleteMany()
+    await prisma.registration.deleteMany()
+    await prisma.stall.deleteMany()
+    await prisma.volunteer.deleteMany()
+    await prisma.student.deleteMany()
+    await prisma.event.deleteMany()
+    await prisma.community.deleteMany()
+    await prisma.user.deleteMany()
+    console.log('Cleaned existing data')
+  } else {
+    const existingUsers = await prisma.user.count()
+    if (existingUsers > 0) {
+      console.log(`Database already has ${existingUsers} user(s). Skipping seed.`)
+      console.log('To force re-seed, set SEED_CLEAN=true')
+      return
+    }
+  }
 
-  // Create Admin User
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123'
+  let adminPassword = process.env.ADMIN_PASSWORD
+  if (!adminPassword) {
+    if (isProduction) {
+      adminPassword = randomBytes(24).toString('base64')
+      console.log('')
+      console.log('========================================')
+      console.log('  GENERATED ADMIN PASSWORD')
+      console.log('  (save this immediately!)')
+      console.log(`  ${adminPassword}`)
+      console.log('========================================')
+      console.log('')
+    } else {
+      adminPassword = 'admin123'
+      console.log('WARNING: Using default admin password. Set ADMIN_PASSWORD env var for production.')
+    }
+  }
+
   const hashedAdminPassword = await hash(adminPassword, 12)
 
   const admin = await prisma.user.create({
@@ -39,9 +66,6 @@ async function main() {
   })
 
   console.log('Created admin user')
-  if (!process.env.ADMIN_PASSWORD) {
-    console.log('WARNING: Using default admin password. Set ADMIN_PASSWORD env var for production.')
-  }
 
   // Create Communities
   const communities = await Promise.all([

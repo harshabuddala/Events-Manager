@@ -286,3 +286,25 @@ model ReportCard {
 
   @@map("report_cards")
 }
+
+model AuthToken {
+  id         String    @id @default(uuid())
+  token      String    @unique
+  type       String
+  userId     String
+  userType   String
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([type, expiresAt])
+  @@map("auth_tokens")
+}
+
+model RateLimiterFlexible {
+  key    String    @id
+  points Int       @default(0)
+  expire DateTime?
+
+  @@map("rate_limiter")
+}

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import { hash } from 'bcryptjs'
 import { z } from 'zod'
 
 const rateSchema = z.object({
@@ -43,7 +42,7 @@ export async function POST(
 
     // Determine volunteer context based on logged-in user
     let volunteer = null
-    if (session.role === 'VOLUNTEER') {
+    if (session.role === 'VOLUNTEER' || session.role === 'LEAD_EVALUATOR' || session.role === 'COORDINATOR') {
       volunteer = await prisma.volunteer.findUnique({
         where: { email: session.email }
       })
@@ -51,20 +50,21 @@ export async function POST(
         return NextResponse.json({ error: 'Volunteer record not found. Please contact administration.' }, { status: 403 })
       }
     } else {
-      // Admins/Managers can also evaluate using an arbitrary volunteer or a dummy coordinator
-      // Let's find first volunteer in the event or create a system volunteer
-      volunteer = await prisma.volunteer.findFirst()
-      if (!volunteer) {
-      // Fallback create dummy evaluation volunteer
-      volunteer = await prisma.volunteer.create({
-        data: {
-          name: 'System Evaluator',
-          email: 'system.evaluator@example.com',
-          password: await hash('System@Eval123', 12),
-          role: 'LEAD_EVALUATOR',
-          status: 'AVAILABLE'
-        }
+      // Admins/Managers: find a volunteer assigned to this event
+      const eventVolunteer = await prisma.volunteerAssignment.findFirst({
+        where: { eventId: registration.eventId },
+        include: { volunteer: true }
       })
+
+      if (eventVolunteer) {
+        volunteer = eventVolunteer.volunteer
+      } else {
+        // Fallback: find any volunteer in the system
+        volunteer = await prisma.volunteer.findFirst()
+      }
+
+      if (!volunteer) {
+        return NextResponse.json({ error: 'No volunteers available in the system. Please create a volunteer first.' }, { status: 400 })
       }
     }
 

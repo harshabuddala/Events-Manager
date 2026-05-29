@@ -68,30 +68,49 @@ export async function clearSession() {
 
 // ─── Auto-Login Token System ───
 // Used for passwordless login (QR scan, magic links).
-// Short-lived JWT tokens tracked server-side to prevent replay.
-
-const autoLoginUsed = new Map<string, boolean>()
-
-// Clean up consumed tokens every 10 minutes
-setInterval(() => {
-  autoLoginUsed.clear()
-}, 10 * 60 * 1000)
+// Short-lived JWT tokens tracked in database to prevent replay.
 
 export async function createAutoLoginToken(user: UserPayload): Promise<string> {
-  return await new SignJWT({ sub: user.id, email: user.email, name: user.name, role: user.role })
+  const { prisma } = await import(/* webpackIgnore: true */ './prisma')
+  
+  const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, role: user.role })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('30s')
     .sign(getSecret())
+
+  await prisma.authToken.create({
+    data: {
+      token,
+      type: 'AUTO_LOGIN',
+      userId: user.id,
+      userType: user.role,
+      expiresAt: new Date(Date.now() + 30 * 1000),
+    },
+  })
+
+  return token
 }
 
 export async function consumeAutoLoginToken(token: string): Promise<UserPayload | null> {
-  const alreadyUsed = autoLoginUsed.get(token)
-  if (alreadyUsed) return null
-
+  const { prisma } = await import(/* webpackIgnore: true */ './prisma')
+  
   const payload = await verifyToken(token)
   if (!payload) return null
 
-  autoLoginUsed.set(token, true)
+  const result = await prisma.authToken.updateMany({
+    where: {
+      token,
+      type: 'AUTO_LOGIN',
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    data: {
+      consumedAt: new Date(),
+    },
+  })
+
+  if (result.count === 0) return null
+
   return payload
 }
