@@ -43,7 +43,9 @@ COPY app ./app/
 COPY lib ./lib/
 COPY hooks ./hooks/
 COPY middleware.ts ./
-COPY public ./public/ 2>/dev/null || true
+COPY entrypoint.sh ./
+COPY prisma.config.ts ./
+# Note: Add public directory copy here if you create one in the future
 
 # Build Next.js (standalone output)
 ENV NEXT_TELEMETRY_DISABLED=1
