@@ -34,6 +34,8 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (editUser) {
@@ -54,10 +56,56 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
       });
     }
     setError('');
+    setTouched({});
+    setErrors({});
   }, [editUser, isOpen]);
+
+  const validateField = (name: string, value: string): string => {
+    switch (name) {
+      case 'name':
+        return !value.trim() ? 'Full name is required' : '';
+      case 'email':
+        if (!value.trim()) return 'Email address is required';
+        return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? 'Invalid email format' : '';
+      case 'password':
+        if (!editUser && !value) return 'Password is required';
+        if (value && value.length < 6) return 'Password must be at least 6 characters';
+        return '';
+      default:
+        return '';
+    }
+  };
+
+  const handleBlur = (name: string) => {
+    setTouched(prev => ({ ...prev, [name]: true }));
+    const err = validateField(name, formData[name as keyof UserFormData]);
+    setErrors(prev => ({ ...prev, [name]: err }));
+  };
+
+  const handleChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (touched[name]) {
+      const err = validateField(name, value);
+      setErrors(prev => ({ ...prev, [name]: err }));
+    }
+  };
+
+  const validate = (): boolean => {
+    const fieldsToCheck = editUser ? ['name', 'email'] : ['name', 'email', 'password'];
+    const newErrors: Record<string, string> = {};
+    let allValid = true;
+    for (const field of fieldsToCheck) {
+      const err = validateField(field, formData[field as keyof UserFormData]);
+      if (err) { newErrors[field] = err; allValid = false; }
+    }
+    setErrors(newErrors);
+    setTouched(Object.keys(formData).reduce((acc, key) => ({ ...acc, [key]: true }), {}));
+    return allValid;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     setIsLoading(true);
     setError('');
 
@@ -71,95 +119,97 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
     }
   };
 
+  const inputClass = (name: string) => {
+    const hasErr = touched[name] && errors[name];
+    return `w-full pl-9 pr-4 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 transition-all placeholder:text-slate-400 ${
+      hasErr
+        ? 'bg-rose-50 border border-rose-300 focus:ring-rose-500/20 focus:border-rose-500 text-rose-800'
+        : 'bg-slate-50 border border-slate-200 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800'
+    } disabled:opacity-60 disabled:cursor-not-allowed`;
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">
             {editUser ? 'Edit User' : 'Create New User'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-600 font-medium">
-              {error}
-            </div>
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-600 font-medium">{error}</div>
           )}
 
-          {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700" htmlFor="name">Full Name</label>
+            <label className="text-sm font-bold text-slate-700" htmlFor="name">
+              Full Name <span className="text-rose-500">*</span>
+            </label>
             <div className="relative">
-              <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <User className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${touched.name && errors.name ? 'text-rose-400' : 'text-slate-400'}`} />
               <input
-                id="name"
-                type="text"
+                id="name" type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => handleChange('name', e.target.value)}
+                onBlur={() => handleBlur('name')}
                 placeholder="John Doe"
-                className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800"
-                required
+                className={inputClass('name')}
               />
             </div>
+            {touched.name && errors.name && <p className="text-[11px] text-rose-500 font-medium">{errors.name}</p>}
           </div>
 
-          {/* Email */}
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700" htmlFor="email">Email Address</label>
+            <label className="text-sm font-bold text-slate-700" htmlFor="email">
+              Email Address <span className="text-rose-500">*</span>
+            </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Mail className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${touched.email && errors.email ? 'text-rose-400' : 'text-slate-400'}`} />
               <input
-                id="email"
-                type="email"
+                id="email" type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => handleChange('email', e.target.value)}
+                onBlur={() => handleBlur('email')}
                 placeholder="john@example.com"
                 disabled={!!editUser}
-                className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
-                required
+                className={inputClass('email')}
               />
             </div>
+            {touched.email && errors.email && <p className="text-[11px] text-rose-500 font-medium">{errors.email}</p>}
           </div>
 
-          {/* Password (only for create) */}
           {!editUser && (
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700" htmlFor="password">Password</label>
+              <label className="text-sm font-bold text-slate-700" htmlFor="password">
+                Password <span className="text-rose-500">*</span>
+              </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Lock className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${touched.password && errors.password ? 'text-rose-400' : 'text-slate-400'}`} />
                 <input
-                  id="password"
-                  type="password"
+                  id="password" type="password"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  onBlur={() => handleBlur('password')}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800"
-                  required
-                  minLength={6}
+                  className={inputClass('password')}
                 />
               </div>
+              {touched.password && errors.password && <p className="text-[11px] text-rose-500 font-medium">{errors.password}</p>}
             </div>
           )}
 
-          {/* Phone */}
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-slate-700" htmlFor="phone">Phone Number</label>
             <div className="relative">
               <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
-                id="phone"
-                type="tel"
+                id="phone" type="tel"
                 value={formData.phoneNumber}
                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                 placeholder="+91 98765 43210"
@@ -168,63 +218,34 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
             </div>
           </div>
 
-          {/* Role */}
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700">Role</label>
+            <label className="text-sm font-bold text-slate-700">Role <span className="text-rose-500">*</span></label>
             <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, role: 'ADMIN' })}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
-                  formData.role === 'ADMIN'
-                    ? 'border-violet-500 bg-violet-50 text-violet-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <ShieldAlert className="w-5 h-5" />
-                <span className="text-xs font-semibold">Admin</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, role: 'MANAGER' })}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
-                  formData.role === 'MANAGER'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <Shield className="w-5 h-5" />
-                <span className="text-xs font-semibold">Manager</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, role: 'VOLUNTEER' })}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
-                  formData.role === 'VOLUNTEER'
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <UserCheck className="w-5 h-5" />
-                <span className="text-xs font-semibold">Volunteer</span>
-              </button>
+              {(['ADMIN', 'MANAGER', 'VOLUNTEER'] as const).map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role })}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
+                    formData.role === role
+                      ? role === 'ADMIN' ? 'border-violet-500 bg-violet-50 text-violet-700'
+                        : role === 'MANAGER' ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  {role === 'ADMIN' ? <ShieldAlert className="w-5 h-5" />
+                    : role === 'MANAGER' ? <Shield className="w-5 h-5" />
+                    : <UserCheck className="w-5 h-5" />}
+                  <span className="text-xs font-semibold">{role.charAt(0) + role.slice(1).toLowerCase()}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors"
-            >
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
+            <button type="submit" disabled={isLoading} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors">
               {isLoading ? 'Saving...' : editUser ? 'Update User' : 'Create User'}
             </button>
           </div>

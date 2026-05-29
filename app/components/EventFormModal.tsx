@@ -62,6 +62,8 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // General form data
   const [formData, setFormData] = useState({
@@ -102,12 +104,48 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
 
   const isEditing = !!editEvent?.id;
 
+  const GENERAL_LABELS: Record<string, string> = {
+    name: 'Event Name',
+    communityId: 'Community',
+    date: 'Start Date',
+  };
+
+  const validateField = (name: string, value: string): string => {
+    switch (name) {
+      case 'name':
+      case 'date':
+        return !value.trim() ? `${GENERAL_LABELS[name]} is required` : '';
+      case 'communityId':
+        return !value ? 'Community is required' : '';
+      default:
+        return '';
+    }
+  };
+
+  const handleFieldBlur = (name: string) => {
+    setTouched(prev => ({ ...prev, [name]: true }));
+    const err = validateField(name, formData[name as keyof typeof formData]);
+    setFieldErrors(prev => ({ ...prev, [name]: err }));
+  };
+
+  const handleFieldChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (touched[name]) {
+      const err = validateField(name, value);
+      setFieldErrors(prev => ({ ...prev, [name]: err }));
+    }
+  };
+
+  const hasError = (name: string) => !!(touched[name] && fieldErrors[name]);
+
   // Reset and load data when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
     setActiveTab('general');
     setError('');
+    setTouched({});
+    setFieldErrors({});
     setLinkedStallIds(new Set());
     setOriginalLinkedStallIds(new Set());
     setAssignments([]);
@@ -139,7 +177,8 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
         volunteerEmail: a.volunteer.email,
       })) : []);
     } else {
-      setFormData({ code: '', name: '', communityId: '', date: '', endDate: '', status: 'UPCOMING', description: '' });
+      const autoCode = `E-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setFormData({ code: autoCode, name: '', communityId: '', date: '', endDate: '', status: 'UPCOMING', description: '' });
     }
 
     // Fetch resources
@@ -267,19 +306,20 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
 
   // Helper: Create a community
   const handleQuickCreateCommunity = async () => {
-    if (!quickCommunity.code.trim() || !quickCommunity.name.trim() || !quickCommunity.location.trim() || !quickCommunity.contactPerson.trim()) return;
+    if (!quickCommunity.name.trim()) return;
     setIsCreatingCommunity(true);
     setError('');
     try {
+      const autoCode = `C-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
       const res = await fetch('/api/communities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: quickCommunity.code.trim(),
+          code: autoCode,
           name: quickCommunity.name.trim(),
-          location: quickCommunity.location.trim(),
+          location: quickCommunity.location.trim() || 'TBD',
           zone: quickCommunity.zone.trim() || undefined,
-          contactPerson: quickCommunity.contactPerson.trim(),
+          contactPerson: quickCommunity.contactPerson.trim() || 'TBD',
           contactEmail: quickCommunity.contactEmail.trim() || undefined,
           contactPhone: quickCommunity.contactPhone.trim() || undefined,
           status: 'ACTIVE',
@@ -354,9 +394,17 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
 
     try {
       // Validate general tab
-      if (!formData.code.trim() || !formData.name.trim() || !formData.communityId || !formData.date) {
+      const newErrors: Record<string, string> = {};
+      let valid = true;
+      for (const field of ['name', 'communityId', 'date'] as const) {
+        const err = validateField(field, formData[field]);
+        if (err) { newErrors[field] = err; valid = false; }
+      }
+      setFieldErrors(newErrors);
+      setTouched(prev => ({ ...prev, name: true, communityId: true, date: true }));
+      if (!valid) {
         setActiveTab('general');
-        throw new Error('Please fill in all required fields in the General tab');
+        return;
       }
 
       const payload = {
@@ -452,8 +500,7 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
     }
   };
 
-  // Tab validation indicators
-  const generalValid = formData.code.trim() && formData.name.trim() && formData.communityId && formData.date;
+  const generalValid = formData.name.trim() && formData.communityId && formData.date;
   const stallCount = linkedStallIds.size;
   const assignmentCount = assignments.length;
 
@@ -503,10 +550,15 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700" htmlFor="code">Code <span className="text-rose-500">*</span></label>
+                  <label className="text-sm font-bold text-slate-700" htmlFor="code">Code</label>
                   <div className="relative">
                     <Hash className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input id="code" type="text" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} placeholder="E-1287" disabled={isEditing} className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800 disabled:opacity-60 disabled:cursor-not-allowed" required />
+                    <input
+                      id="code" type="text"
+                      value={formData.code}
+                      readOnly
+                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-lg bg-slate-100 border border-slate-200 text-slate-600 cursor-default"
+                    />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -523,9 +575,21 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-slate-700" htmlFor="name">Event Name <span className="text-rose-500">*</span></label>
                 <div className="relative">
-                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input id="name" type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Greenfield Science Fest" className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800" required />
+                  <Calendar className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${hasError('name') ? 'text-rose-400' : 'text-slate-400'}`} />
+                  <input
+                    id="name" type="text"
+                    value={formData.name}
+                    onChange={(e) => handleFieldChange('name', e.target.value)}
+                    onBlur={() => handleFieldBlur('name')}
+                    placeholder="Greenfield Science Fest"
+                    className={`w-full pl-9 pr-4 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 transition-all placeholder:text-slate-400 ${
+                      hasError('name')
+                        ? 'bg-rose-50 border border-rose-300 focus:ring-rose-500/20 focus:border-rose-500 text-rose-800'
+                        : 'bg-slate-50 border border-slate-200 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800'
+                    }`}
+                  />
                 </div>
+                {hasError('name') && <p className="text-[11px] text-rose-500 font-medium">{fieldErrors.name}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -540,30 +604,38 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
                 {showQuickCommunity ? (
                   <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 space-y-3">
                     <p className="text-xs font-bold text-violet-700">Create New Community</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input type="text" value={quickCommunity.code} onChange={(e) => setQuickCommunity({ ...quickCommunity, code: e.target.value })} placeholder="Code (e.g. C-001)" className="px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
-                      <input type="text" value={quickCommunity.name} onChange={(e) => setQuickCommunity({ ...quickCommunity, name: e.target.value })} placeholder="Community Name" className="px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input type="text" value={quickCommunity.name} onChange={(e) => setQuickCommunity({ ...quickCommunity, name: e.target.value })} placeholder="Community Name *" className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input type="text" value={quickCommunity.location} onChange={(e) => setQuickCommunity({ ...quickCommunity, location: e.target.value })} placeholder="Location" className="px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
-                      <input type="text" value={quickCommunity.zone} onChange={(e) => setQuickCommunity({ ...quickCommunity, zone: e.target.value })} placeholder="Zone (optional)" className="px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input type="text" value={quickCommunity.location} onChange={(e) => setQuickCommunity({ ...quickCommunity, location: e.target.value })} placeholder="Location (optional)" className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
                     </div>
-                    <input type="text" value={quickCommunity.contactPerson} onChange={(e) => setQuickCommunity({ ...quickCommunity, contactPerson: e.target.value })} placeholder="Contact Person" className="w-full px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
-                    <div className="grid grid-cols-2 gap-3">
-                      <input type="email" value={quickCommunity.contactEmail} onChange={(e) => setQuickCommunity({ ...quickCommunity, contactEmail: e.target.value })} placeholder="Contact Email" className="px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
-                      <input type="tel" value={quickCommunity.contactPhone} onChange={(e) => setQuickCommunity({ ...quickCommunity, contactPhone: e.target.value })} placeholder="Contact Phone" className="px-3 py-2 text-sm bg-white border border-violet-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800" />
-                    </div>
-                    <button onClick={handleQuickCreateCommunity} disabled={isCreatingCommunity} className="w-full py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-60 transition-colors">
+                    <button onClick={handleQuickCreateCommunity} disabled={isCreatingCommunity || !quickCommunity.name.trim()} className="w-full py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-60 transition-colors">
                       {isCreatingCommunity ? 'Creating...' : 'Create & Select Community'}
                     </button>
                   </div>
                 ) : (
-                  <select id="community" value={formData.communityId} onChange={(e) => setFormData({ ...formData, communityId: e.target.value })} className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800" required>
-                    <option value="">Select a community...</option>
-                    {communities.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.code}) - {c.location}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      id="community"
+                      value={formData.communityId}
+                      onChange={(e) => handleFieldChange('communityId', e.target.value)}
+                      onBlur={() => handleFieldBlur('communityId')}
+                      className={`w-full px-4 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        hasError('communityId')
+                          ? 'bg-rose-50 border border-rose-300 focus:ring-rose-500/20 focus:border-rose-500 text-rose-800'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800'
+                      }`}
+                    >
+                      <option value="">Select a community...</option>
+                      {communities.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.code}) - {c.location}</option>
+                      ))}
+                    </select>
+                    {hasError('communityId') && <p className="text-[11px] text-rose-500 font-medium mt-1">{fieldErrors.communityId}</p>}
+                  </div>
                 )}
               </div>
 
@@ -571,9 +643,20 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700" htmlFor="date">Start Date <span className="text-rose-500">*</span></label>
                   <div className="relative">
-                    <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800" required />
+                    <Calendar className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${hasError('date') ? 'text-rose-400' : 'text-slate-400'}`} />
+                    <input
+                      id="date" type="date"
+                      value={formData.date}
+                      onChange={(e) => handleFieldChange('date', e.target.value)}
+                      onBlur={() => handleFieldBlur('date')}
+                      className={`w-full pl-9 pr-4 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        hasError('date')
+                          ? 'bg-rose-50 border border-rose-300 focus:ring-rose-500/20 focus:border-rose-500 text-rose-800'
+                          : 'bg-slate-50 border border-slate-200 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800'
+                      }`}
+                    />
                   </div>
+                  {hasError('date') && <p className="text-[11px] text-rose-500 font-medium">{fieldErrors.date}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700" htmlFor="endDate">End Date</label>
@@ -790,24 +873,32 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
         <div className="p-5 border-t border-slate-100 shrink-0 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 text-xs text-slate-500">
-              <span className={`flex items-center gap-1 ${generalValid ? 'text-emerald-600' : ''}`}>
-                {generalValid ? <Check className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-slate-300" />}
-                General
+              <span className={`flex items-center gap-1 ${generalValid ? 'text-emerald-600' : 'text-slate-500'}`}>
+                <Check className="w-3 h-3" />
+                Required fields set
               </span>
-              <ChevronRight className="w-3 h-3 text-slate-300" />
-              <span className={`flex items-center gap-1 ${stallCount > 0 ? 'text-emerald-600' : ''}`}>
-                {stallCount > 0 ? <Check className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-slate-300" />}
-                {stallCount} Stall{stallCount !== 1 ? 's' : ''}
-              </span>
-              <ChevronRight className="w-3 h-3 text-slate-300" />
-              <span className={`flex items-center gap-1 ${assignmentCount > 0 ? 'text-emerald-600' : ''}`}>
-                {assignmentCount > 0 ? <Check className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-slate-300" />}
-                {assignmentCount} Volunteer{assignmentCount !== 1 ? 's' : ''}
-              </span>
+              {stallCount > 0 && (
+                <>
+                  <ChevronRight className="w-3 h-3 text-slate-300" />
+                  <span className="text-violet-600 flex items-center gap-1">
+                    <Star className="w-3 h-3" />
+                    {stallCount} Stall{stallCount !== 1 ? 's' : ''}
+                  </span>
+                </>
+              )}
+              {assignmentCount > 0 && (
+                <>
+                  <ChevronRight className="w-3 h-3 text-slate-300" />
+                  <span className="text-emerald-600 flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    {assignmentCount} Volunteer{assignmentCount !== 1 ? 's' : ''}
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={isSaving || !generalValid} className="px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors">
+              <button onClick={handleSave} disabled={isSaving} className="px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors">
                 {isSaving ? 'Saving...' : isEditing ? 'Update Event & Save' : 'Create Event & Save'}
               </button>
             </div>

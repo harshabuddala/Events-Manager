@@ -13,20 +13,22 @@ export default function StallFormModal({ isOpen, onClose, onSubmit }: StallFormM
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
       setName('');
       setError('');
+      setTouched(false);
     }
   }, [isOpen]);
 
+  const nameError = !name.trim() ? 'Stall name is required' : '';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      setError('Please enter a stall name');
-      return;
-    }
+    setTouched(true);
+    if (nameError) return;
     setIsLoading(true);
     setError('');
 
@@ -58,11 +60,27 @@ export default function StallFormModal({ isOpen, onClose, onSubmit }: StallFormM
           )}
 
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700" htmlFor="name">Stall Name</label>
+            <label className="text-sm font-bold text-slate-700" htmlFor="name">
+              Stall Name <span className="text-rose-500">*</span>
+            </label>
             <div className="relative">
-              <ShoppingBag className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Math Quest" className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800" required />
+              <ShoppingBag className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${touched && nameError ? 'text-rose-400' : 'text-slate-400'}`} />
+              <input
+                id="name" type="text"
+                value={name}
+                onChange={(e) => { setName(e.target.value); if (touched) setError(''); }}
+                onBlur={() => setTouched(true)}
+                placeholder="e.g. Math Quest"
+                className={`w-full pl-9 pr-4 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 transition-all placeholder:text-slate-400 ${
+                  touched && nameError
+                    ? 'bg-rose-50 border border-rose-300 focus:ring-rose-500/20 focus:border-rose-500 text-rose-800'
+                    : 'bg-slate-50 border border-slate-200 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800'
+                }`}
+              />
             </div>
+            {touched && nameError && (
+              <p className="text-[11px] text-rose-500 font-medium">{nameError}</p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">

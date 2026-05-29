@@ -40,6 +40,8 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changePassword, setChangePassword] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const isEditMode = !!volunteer;
 
@@ -73,49 +75,84 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
     setSuccess(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setTouched({});
+    setErrors({});
   }, [volunteer, isOpen]);
 
-  if (!isOpen) return null;
+  const validateField = (name: string): string => {
+    switch (name) {
+      case 'name':
+        return !formData.name.trim() ? 'Full name is required' : '';
+      case 'email':
+        if (!formData.email.trim()) return 'Email address is required';
+        return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) ? 'Invalid email format' : '';
+      case 'password':
+        if (!isEditMode || changePassword) {
+          if (!formData.password) return 'Password is required';
+          if (formData.password.length < 8) return 'Password must be at least 8 characters';
+        }
+        return '';
+      case 'confirmPassword':
+        if (!isEditMode || changePassword) {
+          if (!formData.confirmPassword) return 'Please confirm your password';
+          if (formData.password !== formData.confirmPassword) return 'Passwords do not match';
+        }
+        return '';
+      default:
+        return '';
+    }
+  };
 
-  const validateForm = (): boolean => {
-    if (!formData.name.trim()) {
-      setError('Full name is required');
-      return false;
+  const handleBlur = (name: string) => {
+    setTouched(prev => ({ ...prev, [name]: true }));
+    setErrors(prev => ({ ...prev, [name]: validateField(name) }));
+  };
+
+  const handleChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (touched[name]) {
+      setErrors(prev => ({ ...prev, [name]: validateField(name) }));
     }
-    if (!formData.email.trim()) {
-      setError('Email address is required');
-      return false;
-    }
+  };
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    let allValid = true;
+
+    const nameErr = validateField('name');
+    if (nameErr) { newErrors.name = nameErr; allValid = false; }
+
+    const emailErr = validateField('email');
+    if (emailErr) { newErrors.email = emailErr; allValid = false; }
+
     if (!isEditMode || changePassword) {
-      if (!formData.password) {
-        setError('Password is required');
-        return false;
-      }
-      if (formData.password.length < 8) {
-        setError('Password must be at least 8 characters');
-        return false;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match');
-        return false;
-      }
+      const passErr = validateField('password');
+      if (passErr) { newErrors.password = passErr; allValid = false; }
+      const confirmErr = validateField('confirmPassword');
+      if (confirmErr) { newErrors.confirmPassword = confirmErr; allValid = false; }
     }
-    return true;
+
+    setErrors(newErrors);
+    const allTouched: Record<string, boolean> = {};
+    Object.keys(formData).forEach(k => { allTouched[k] = true; });
+    if (!isEditMode || changePassword) {
+      allTouched.password = true;
+      allTouched.confirmPassword = true;
+    }
+    setTouched(allTouched);
+    return allValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!validate()) return;
 
     setIsSaving(true);
     setError('');
     setSuccess(false);
 
     try {
-      const url = isEditMode
-        ? `/api/volunteers/${volunteer!.id}`
-        : '/api/volunteers';
-
+      const url = isEditMode ? `/api/volunteers/${volunteer!.id}` : '/api/volunteers';
       const payload: any = {
         name: formData.name,
         email: formData.email,
@@ -125,7 +162,6 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
         preferredStall: formData.preferredStall,
       };
 
-      // Include password for new volunteers or when changing password
       if (!isEditMode || (changePassword && formData.password)) {
         payload.password = formData.password;
       }
@@ -155,28 +191,35 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
     }
   };
 
+  const inputClass = (name: string) => {
+    const hasErr = touched[name] && errors[name];
+    return `w-full pl-10 pr-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+      hasErr
+        ? 'border-rose-300 bg-rose-50 focus:ring-rose-500/20 focus:border-rose-500 text-rose-800'
+        : 'border-slate-200 bg-white focus:ring-violet-500/20 focus:border-violet-500 text-slate-800'
+    }`;
+  };
+
+  const iconClass = (name: string) =>
+    touched[name] && errors[name] ? 'text-rose-400' : 'text-slate-400';
+
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
             {isEditMode ? 'Edit Volunteer' : 'Add New Volunteer'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
+            <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-lg text-sm">{error}</div>
           )}
 
           {success && (
@@ -186,47 +229,44 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
             </div>
           )}
 
-          {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
               Full Name <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
-              <User2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <User2 className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${iconClass('name')}`} />
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => handleChange('name', e.target.value)}
+                onBlur={() => handleBlur('name')}
                 placeholder="Enter volunteer's full name"
-                className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-                required
+                className={inputClass('name')}
               />
             </div>
+            {touched.name && errors.name && <p className="text-[11px] text-rose-500 font-medium mt-1">{errors.name}</p>}
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
               Email Address <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${iconClass('email')}`} />
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => handleChange('email', e.target.value)}
+                onBlur={() => handleBlur('email')}
                 placeholder="volunteer@example.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-                required
+                className={inputClass('email')}
               />
             </div>
+            {touched.email && errors.email && <p className="text-[11px] text-rose-500 font-medium mt-1">{errors.email}</p>}
           </div>
 
-          {/* Phone Number */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Phone Number
-            </label>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">Phone Number</label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -234,17 +274,14 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                 value={formData.phoneNumber}
                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                 placeholder="+1 234 567 8900"
-                className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Role */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">
-                Role
-              </label>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Role</label>
               <div className="relative">
                 <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                 <select
@@ -258,12 +295,8 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                 </select>
               </div>
             </div>
-
-            {/* Status */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">
-                Status
-              </label>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Status</label>
               <div className="relative">
                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                 <select
@@ -279,11 +312,8 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
             </div>
           </div>
 
-          {/* Preferred Stall */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Preferred Stall
-            </label>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">Preferred Stall</label>
             <select
               value={formData.preferredStall}
               onChange={(e) => setFormData({ ...formData, preferredStall: e.target.value })}
@@ -297,7 +327,6 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
             </select>
           </div>
 
-          {/* Password Section */}
           <div className="pt-2 border-t border-slate-200">
             {isEditMode && (
               <div className="flex items-center justify-between mb-3">
@@ -305,16 +334,16 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                   <KeyRound className="w-4 h-4 text-slate-500" />
                   <span className="text-sm font-semibold text-slate-700">Password</span>
                   {volunteer?.hasPassword && (
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                      Set
-                    </span>
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Set</span>
                   )}
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setChangePassword(!changePassword);
-                    setFormData({ ...formData, password: '', confirmPassword: '' });
+                    setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
+                    setTouched(prev => ({ ...prev, password: false, confirmPassword: false }));
+                    setErrors(prev => ({ ...prev, password: '', confirmPassword: '' }));
                   }}
                   className="text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
                 >
@@ -330,14 +359,14 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                     {isEditMode ? 'New Password' : 'Password'} <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${iconClass('password')}`} />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(e) => handleChange('password', e.target.value)}
+                      onBlur={() => handleBlur('password')}
                       placeholder="Min. 8 characters"
-                      className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-                      required={!isEditMode || changePassword}
+                      className={inputClass('password')}
                     />
                     <button
                       type="button"
@@ -347,6 +376,7 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {touched.password && errors.password && <p className="text-[11px] text-rose-500 font-medium mt-1">{errors.password}</p>}
                 </div>
 
                 <div>
@@ -354,14 +384,14 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                     Confirm Password <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${iconClass('confirmPassword')}`} />
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={formData.confirmPassword}
-                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                      onBlur={() => handleBlur('confirmPassword')}
                       placeholder="Repeat password"
-                      className="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-                      required={!isEditMode || changePassword}
+                      className={inputClass('confirmPassword')}
                     />
                     <button
                       type="button"
@@ -371,12 +401,12 @@ export default function VolunteerFormModal({ isOpen, onClose, volunteer, onSucce
                       {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {touched.confirmPassword && errors.confirmPassword && <p className="text-[11px] text-rose-500 font-medium mt-1">{errors.confirmPassword}</p>}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
             <button
               type="button"
