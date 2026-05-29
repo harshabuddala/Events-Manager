@@ -118,4 +118,106 @@ echo "=========================================="
 echo "  Starting Next.js server on port ${PORT:-8472}..."
 echo "  NODE_ENV=${NODE_ENV:-production}"
 echo "=========================================="
-exec node server.js
+
+# Start server in background for health checks
+node server.js &
+SERVER_PID=$!
+
+# Wait for server to be ready
+echo ""
+echo "[6/6] Running startup health checks..."
+HEALTH_RETRIES=30
+HEALTH_COUNT=0
+until curl -sf "http://localhost:${PORT:-8472}/api/health" > /dev/null 2>&1; do
+  HEALTH_COUNT=$((HEALTH_COUNT + 1))
+  if [ $HEALTH_COUNT -ge $HEALTH_RETRIES ]; then
+    echo "  → ERROR: Server failed to start after $HEALTH_RETRIES attempts"
+    kill $SERVER_PID 2>/dev/null
+    exit 1
+  fi
+  sleep 1
+done
+
+# Run detailed health checks
+echo ""
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║              STARTUP HEALTH CHECKS                   ║"
+echo "  ╠══════════════════════════════════════════════════════╣"
+
+# API Health Check
+API_RESPONSE=$(curl -sf "http://localhost:${PORT:-8472}/api/health" 2>/dev/null)
+if [ $? -eq 0 ]; then
+  API_STATUS=$(echo "$API_RESPONSE" | node -e "
+    let data = '';
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        console.log(json.status || 'unknown');
+      } catch { console.log('error'); }
+    });
+  " 2>/dev/null || echo "error")
+  
+  if [ "$API_STATUS" = "healthy" ]; then
+    echo "  ║  API Connection:    ✅ HEALTHY                       ║"
+  else
+    echo "  ║  API Connection:    ⚠️  $API_STATUS                       ║"
+  fi
+else
+  echo "  ║  API Connection:    ❌ FAILED                        ║"
+fi
+
+# Database Health Check
+DB_CHECK=$(curl -sf "http://localhost:${PORT:-8472}/api/health" 2>/dev/null | node -e "
+  let data = '';
+  process.stdin.on('data', chunk => data += chunk);
+  process.stdin.on('end', () => {
+    try {
+      const json = JSON.parse(data);
+      console.log(json.checks?.database || 'unknown');
+    } catch { console.log('error'); }
+  });
+" 2>/dev/null || echo "error")
+
+if [ "$DB_CHECK" = "ok" ]; then
+  echo "  ║  Database:          ✅ CONNECTED                     ║"
+else
+  echo "  ║  Database:          ❌ $DB_CHECK                     ║"
+fi
+
+# Prisma Check
+PRISMA_CHECK=$(curl -sf "http://localhost:${PORT:-8472}/api/health" 2>/dev/null | node -e "
+  let data = '';
+  process.stdin.on('data', chunk => data += chunk);
+  process.stdin.on('end', () => {
+    try {
+      const json = JSON.parse(data);
+      console.log(json.checks?.prisma || 'unknown');
+    } catch { console.log('error'); }
+  });
+" 2>/dev/null || echo "error")
+
+if [ "$PRISMA_CHECK" = "ok" ]; then
+  echo "  ║  Prisma ORM:        ✅ READY                         ║"
+else
+  echo "  ║  Prisma ORM:        ❌ $PRISMA_CHECK                     ║"
+fi
+
+# Uptime
+UPTIME=$(curl -sf "http://localhost:${PORT:-8472}/api/health" 2>/dev/null | node -e "
+  let data = '';
+  process.stdin.on('data', chunk => data += chunk);
+  process.stdin.on('end', () => {
+    try {
+      const json = JSON.parse(data);
+      console.log(Math.floor(json.uptime || 0));
+    } catch { console.log('0'); }
+  });
+" 2>/dev/null || echo "0")
+echo "  ║  Server Uptime:     ${UPTIME}s                            ║"
+
+echo "  ╚══════════════════════════════════════════════════════╝"
+echo ""
+
+# Bring server to foreground
+wait $SERVER_PID

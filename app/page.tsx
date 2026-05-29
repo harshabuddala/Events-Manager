@@ -199,14 +199,34 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        setError(data.error || 'Login failed');
+      if (response.status === 401) {
+        setError('Invalid email or password. Please check your credentials and try again.');
         return;
       }
+
+      if (response.status === 429) {
+        setError('Too many login attempts. Please wait a few minutes before trying again.');
+        return;
+      }
+
+      if (response.status >= 500) {
+        setError('Server error. Our team has been notified. Please try again in a moment.');
+        return;
+      }
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || 'Login failed. Please try again.');
+        return;
+      }
+
       window.location.replace('/dashboard');
-    } catch {
-      setError('An error occurred. Please try again.');
+    } catch (err) {
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -310,22 +330,24 @@ export default function LoginPage() {
                     <a href="#" className="text-xs font-bold text-violet-600 hover:text-violet-700 transition-colors">Forgot password?</a>
                   </div>
                   <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input 
                       id="password"
                       type={showPassword ? 'text' : 'password'} 
                       value={password}
                       onChange={(e) => { setPassword(e.target.value); if (error) setError(''); }}
                       placeholder="••••••••" 
-                      className="w-full pl-10 pr-10 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800 font-mono"
+                      className="w-full pl-10 pr-12 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 placeholder:text-slate-400 text-slate-800 font-mono"
                       required
                     />
                     <button 
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 p-2 rounded-lg transition-all"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      title={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                   </div>
                 </div>
