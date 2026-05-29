@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 
 const publicPaths = ['/']
-const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
+const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/api/health', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -12,8 +12,24 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-Frame-Options', 'SAMEORIGIN')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-  response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; font-src 'self'; connect-src 'self' ws: wss: http: https:")
   response.headers.set('X-DNS-Prefetch-Control', 'off')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
+  response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+
+  // CSP — allow inline styles for Tailwind, unsafe-inline for dev compatibility
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self' ws: wss: http: https:",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ')
+  response.headers.set('Content-Security-Policy', csp)
 
   const isPublic = publicPaths.includes(pathname) || publicPrefixes.some(p => pathname.startsWith(p))
 

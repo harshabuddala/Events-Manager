@@ -9,6 +9,9 @@
 #   4. Configure your domain in the Domain tab or use Traefik labels
 #   5. Hit Deploy
 #
+# The app automatically runs migrations + seeds on first startup.
+# Default admin: admin@edunura.com / admin123 (change in production!)
+#
 # Required Environment Variables (add in Dokploy Environment tab):
 #   DATABASE_URL=postgresql://edunura:${POSTGRES_PASSWORD}@edunura-db:5432/edunura
 #   JWT_SECRET=<generate-a-strong-random-secret>
@@ -16,6 +19,7 @@
 #   POSTGRES_USER=edunura
 #   POSTGRES_DB=edunura
 #   NODE_ENV=production
+#   ADMIN_PASSWORD=<set-a-strong-admin-password>
 # =============================================================================
 
 services:
@@ -31,6 +35,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - edunura-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -39,9 +44,25 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ---------------------------------------------------------------------------
   # Next.js Application
+  # - Runs migrations automatically on startup
+  # - Seeds database if empty (no users found)
+  # - Starts Next.js server on port 8472
   # ---------------------------------------------------------------------------
   edunura-app:
     build:
@@ -57,42 +78,33 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@edunura-db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       PORT: 8472
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8472/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8472/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.edunura.rule=Host(`${APP_DOMAIN}`)"
       - "traefik.http.routers.edunura.entrypoints=websecure"
       - "traefik.http.routers.edunura.tls.certResolver=letsencrypt"
       - "traefik.http.services.edunura.loadbalancer.server.port=8472"
-
-  # ---------------------------------------------------------------------------
-  # Prisma Migration Runner (runs once on deploy, then exits)
-  # Uncomment below if you want automatic migrations on each deploy.
-  # Note: Dokploy may handle this differently — test before enabling.
-  # ---------------------------------------------------------------------------
-  # edunura-migrate:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   restart: "no"
-  #   depends_on:
-  #     edunura-db:
-  #       condition: service_healthy
-  #   networks:
-  #     - dokploy-network
-  #   environment:
-  #     NODE_ENV: production
-  #     DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@edunura-db:5432/${POSTGRES_DB}
-  #     JWT_SECRET: ${JWT_SECRET}
-  #   command: ["npx", "prisma", "migrate", "deploy"]
-  #   profiles:
-  #     - migrate
 
 # =============================================================================
 # Volumes
