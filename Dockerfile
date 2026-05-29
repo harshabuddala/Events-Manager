@@ -53,21 +53,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Copy generated Prisma client (custom output path in schema)
 COPY --from=builder /app/generated/prisma ./generated/prisma
 
-# Copy Prisma engine files and CLI (needed for migrations)
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.package-lock.json ./node_modules/.package-lock.json
+# Copy full node_modules (needed for Prisma CLI migrations + seed)
+COPY --from=builder /app/node_modules ./node_modules
 
-# Copy pg driver (needed by entrypoint health check)
-COPY --from=builder /app/node_modules/pg ./node_modules/pg
-COPY --from=builder /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
-COPY --from=builder /app/node_modules/pg-pool ./node_modules/pg-pool
-
-# Copy prisma schema (needed at runtime for migrations)
+# Copy prisma schema + seed (needed at runtime for migrations)
 COPY --from=builder /app/prisma ./prisma
-
-# Copy seed file (needed for initial database seeding)
-COPY --from=builder /app/prisma/seed.ts ./prisma/seed.ts
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/entrypoint.sh ./entrypoint.sh
