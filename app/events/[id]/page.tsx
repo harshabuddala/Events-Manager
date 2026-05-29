@@ -41,7 +41,7 @@ export default function EventDetailPage() {
   
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics'>('registrations');
   const [userRole, setUserRole] = useState<string>('');
   const [isAssignedVolunteer, setIsAssignedVolunteer] = useState(false);
 

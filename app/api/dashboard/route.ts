@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 export async function GET() {
   try {
     const session = await getSession()
-    if (!session || session.role !== 'ADMIN') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -135,12 +135,28 @@ export async function GET() {
     const visitedOneCount = visitedOne.length
     const visitedThree = visitedOne.filter(v => v._count >= 3).length
 
-    const allStallsCount = await prisma.stall.count()
+    // Get stall count per event (not global) for "visited all" calculation
+    const eventsWithStallCount = await prisma.event.findMany({
+      select: { id: true, _count: { select: { stalls: true } } }
+    })
+    const stallCountByEvent = new Map(eventsWithStallCount.map(e => [e.id, e._count.stalls]))
+
+    const regsWithEvents = await prisma.registration.findMany({
+      select: { id: true, eventId: true }
+    })
+    const regEventMap = new Map(regsWithEvents.map(r => [r.id, r.eventId]))
+
     const visitedAll = await prisma.stallVisit.groupBy({
       by: ['registrationId'],
       _count: true,
     })
-    const visitedAllCount = visitedAll.filter(v => v._count >= allStallsCount).length
+    const visitedAllCount = visitedAll.filter(v => {
+      const eventId = regEventMap.get(v.registrationId)
+      if (!eventId) return false
+      const eventStallCount = stallCountByEvent.get(eventId) || 0
+      if (eventStallCount === 0) return false
+      return v._count >= eventStallCount
+    }).length
 
     const reportsGenerated = totalReportCards
 

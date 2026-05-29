@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import EventFormModal from '@/app/components/EventFormModal';
 import { 
@@ -26,7 +26,7 @@ interface Event {
   completion: number;
 }
 
-export default function EventsPage() {
+function EventsPageContent() {
   const [events, setEvents] = useState<Event[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -36,6 +36,8 @@ export default function EventsPage() {
   const [menuState, setMenuState] = useState<{id: string; top: number; left: number} | null>(null);
   const [userRole, setUserRole] = useState<string>('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const communityIdParam = searchParams.get('communityId');
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -75,17 +77,21 @@ export default function EventsPage() {
           status: getComputedStatus(e.date, e.status)
         }));
         setEvents(mapped);
+
+        // If communityId param is present, auto-redirect if only 1 event matches
+        if (communityIdParam) {
+          const communityEvents = mapped.filter((e: any) => e.communityId === communityIdParam);
+          if (communityEvents.length === 1) {
+            router.replace(`/events/${communityEvents[0].id}`);
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to fetch events:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  }, [communityIdParam, router]);
 
   const handleSuccess = () => {
     setEditingEvent(null);
@@ -362,5 +368,17 @@ export default function EventsPage() {
         } as any : null}
       />
     </DashboardLayout>
+  );
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <EventsPageContent />
+    </Suspense>
   );
 }

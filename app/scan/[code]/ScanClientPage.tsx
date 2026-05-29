@@ -501,7 +501,7 @@ export default function ScanClientPage({
             </div>
             
             {/* Action Buttons (Print) */}
-            {isGrader && visitedStallsCount === totalStalls && totalStalls > 0 && (
+            {totalStalls > 0 && (
               <div className="flex flex-col sm:flex-row gap-3 print:hidden">
                 <button
                   onClick={() => window.print()}

@@ -424,9 +424,9 @@ export default function RegistrationsPage() {
                 <p className="text-[11px] text-slate-400 font-mono">{reg.registrationCode}</p>
                 <button
                   onClick={() => { setSelectedStudent(null); router.push(`/events/${reg.event.id}`); }}
-                  className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg border border-violet-100 transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 px-4 py-2 rounded-lg border border-violet-600 transition-colors shadow-sm"
                 >
-                  View Event <ArrowRight className="w-3 h-3" />
+                  Go to Event <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>

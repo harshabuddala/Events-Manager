@@ -6,10 +6,10 @@ import VolunteerFormModal from '@/app/components/VolunteerFormModal';
 import ResetPasswordModal from '@/app/components/ResetPasswordModal';
 import QrLoginGenerator from '@/app/components/QrLoginGenerator';
 import { 
-  UserCheck, Search, Filter, 
+  UserCheck, Search, 
   MoreVertical, ArrowRight, Plus, 
   CheckCircle2, Mail, Phone, Calendar as CalendarIcon, Star, Loader2,
-  Edit2, Trash2, AlertTriangle, Lock, Unlock, KeyRound, QrCode
+  Edit2, Trash2, AlertTriangle, KeyRound, QrCode
 } from 'lucide-react';
 
 interface Volunteer {
@@ -194,9 +194,7 @@ export default function VolunteersPage() {
               className="w-full pl-9 pr-4 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm placeholder:text-slate-400"
             />
           </div>
-          <button className="p-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 shadow-sm transition-colors shrink-0">
-            <Filter className="w-4 h-4" />
-          </button>
+          
         </div>
       </div>
 
@@ -209,7 +207,6 @@ export default function VolunteersPage() {
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[25%]">Volunteer Details</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contact Information</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status / Stall</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Password</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Performance</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right w-[80px] sticky right-0 bg-white z-10">Actions</th>
               </tr>
@@ -217,14 +214,14 @@ export default function VolunteersPage() {
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
                     <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
                     Loading volunteers...
                   </td>
                 </tr>
               ) : volunteers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
                     No volunteers found.
                   </td>
                 </tr>
@@ -267,21 +264,6 @@ export default function VolunteersPage() {
                           {getStatusBadge(vol.status)}
                           {vol.preferredStall !== '—' && (
                             <span className="text-[10px] font-bold text-slate-500 pl-1 border-l-2 border-slate-200">Prefers: {vol.preferredStall}</span>
-                          )}
-                       </div>
-                     </td>
-                     <td className="px-5 py-4 text-center">
-                       <div className="flex items-center justify-center">
-                          {vol.hasPassword ? (
-                            <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider" title="Password is set">
-                              <Lock className="w-3 h-3" />
-                              Set
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 border border-amber-100 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider" title="No password set">
-                              <Unlock className="w-3 h-3" />
-                              None
-                            </div>
                           )}
                        </div>
                      </td>
