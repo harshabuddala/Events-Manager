@@ -995,14 +995,14 @@ export default function EventDetailPage() {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-800">All Registrations</h3>
                 <span className="text-[11px] text-slate-400 font-medium">
                   {registrations.filter(matchesSearch).length} of {registrations.length}
                 </span>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 overflow-x-auto">
                 {registrations
                   .filter(matchesSearch)
                   .map((reg: any) => {
@@ -1012,7 +1012,7 @@ export default function EventDetailPage() {
                       REGISTERED: 'bg-slate-100 text-slate-500 border-slate-200',
                     };
                     return (
-                      <div key={reg.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/60 transition-colors">
+                      <div key={reg.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/60 transition-colors min-w-[640px]">
                         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 flex items-center justify-center text-sm font-bold text-white shrink-0">
                           {reg.student.name.charAt(0)}
                         </div>
@@ -1046,7 +1046,7 @@ export default function EventDetailPage() {
                             <span className="text-[10px] text-slate-400 italic">No visits</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 bg-white pr-1">
                           {canManageEvent && (
                             <>
                               <button
