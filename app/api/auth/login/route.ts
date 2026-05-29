@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { setSession } from '@/lib/auth'
+import { setSession, clearSession } from '@/lib/auth'
 import { compare } from 'bcryptjs'
 import { z } from 'zod'
 import { loginRateLimiter } from '@/lib/rate-limiter'
@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await clearSession()
+  } catch {}
+
+  try {
     const body = await request.json()
     const result = loginSchema.safeParse(body)
 
@@ -40,7 +44,6 @@ export async function POST(request: NextRequest) {
 
     const { email, password } = result.data
 
-    // ─── Try Admin/User login first ───
     const user = await prisma.user.findUnique({
       where: { email },
     })
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
       })
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         user: {
           id: user.id,
@@ -70,9 +73,10 @@ export async function POST(request: NextRequest) {
           role: user.role,
         },
       })
+      response.headers.set('Cache-Control', 'no-store')
+      return response
     }
 
-    // ─── Try Volunteer login ───
     const volunteer = await prisma.volunteer.findUnique({
       where: { email },
     })
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
         role: volunteer.role,
       })
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         user: {
           id: volunteer.id,
@@ -102,9 +106,10 @@ export async function POST(request: NextRequest) {
           role: volunteer.role,
         },
       })
+      response.headers.set('Cache-Control', 'no-store')
+      return response
     }
 
-    // ─── No account found ───
     return NextResponse.json(
       { error: 'Invalid email or password' },
       { status: 401 }

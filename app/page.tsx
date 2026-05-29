@@ -132,6 +132,8 @@ export default function LoginPage() {
   }, [mode, scanState, selectedCamera, scanSuccess]);
 
   useEffect(() => {
+    fetch('/api/auth/clear-session', { method: 'POST', cache: 'no-store' }).catch(() => {})
+    
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     if (token) {
@@ -195,8 +197,12 @@ export default function LoginPage() {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
         body: JSON.stringify({ email, password }),
+        cache: 'no-store',
       });
 
       if (response.status === 401) {

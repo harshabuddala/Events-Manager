@@ -167,6 +167,17 @@ export default function EventDetailPage() {
     fetchResources();
   }, [eventId]);
 
+  // Load registrations on mount when default tab is registrations
+  useEffect(() => {
+    if (activeTab === 'registrations' && registrations.length === 0 && event) {
+      setRegLoading(true);
+      fetch(`/api/events/${eventId}/registrations`)
+        .then(r => r.json())
+        .then(d => setRegistrations(d.registrations || []))
+        .finally(() => setRegLoading(false));
+    }
+  }, [activeTab, event, eventId, registrations.length]);
+
   const handleLinkStall = async () => {
     if (!selectedStall) return;
     try {

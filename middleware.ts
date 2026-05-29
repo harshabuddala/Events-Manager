@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 
 const publicPaths = ['/']
-const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
+const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -46,11 +46,25 @@ export async function middleware(request: NextRequest) {
   const user = token ? await verifyToken(token) : null
 
   if (!isPublic && !user) {
-    return NextResponse.redirect(new URL('/', request.url))
+    const redirectResponse = NextResponse.redirect(new URL('/', request.url))
+    redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    redirectResponse.headers.set('Pragma', 'no-cache')
+    redirectResponse.headers.set('Expires', '0')
+    return redirectResponse
   }
 
   if (pathname === '/' && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    const redirectResponse = NextResponse.redirect(new URL('/dashboard', request.url))
+    redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    redirectResponse.headers.set('Pragma', 'no-cache')
+    redirectResponse.headers.set('Expires', '0')
+    return redirectResponse
+  }
+
+  if (pathname === '/') {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
   }
 
   return response

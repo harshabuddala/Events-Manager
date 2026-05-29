@@ -62,7 +62,6 @@ USER_COUNT=$(node -e "
 if [ "$USER_COUNT" = "0" ]; then
   echo "  → Database is empty, running seed..."
   
-  # Check if tsx is available (it should be in node_modules since we copy full node_modules)
   if [ -f "./node_modules/tsx/dist/cli.mjs" ]; then
     echo "  → Using tsx from node_modules..."
     if node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts 2>&1; then
@@ -79,6 +78,43 @@ if [ "$USER_COUNT" = "0" ]; then
 else
   echo "  → Database already has $USER_COUNT user(s), skipping seed."
   SEED_STATUS="skipped"
+  
+  if [ -n "$ADMIN_PASSWORD" ]; then
+    echo "  → Syncing admin password from ADMIN_PASSWORD env var..."
+    node -e "
+      const { PrismaClient } = require('./generated/prisma/client');
+      const { PrismaPg } = require('./node_modules/@prisma/adapter-pg');
+      const { Pool } = require('pg');
+      const { hash } = require('bcryptjs');
+      
+      async function syncPassword() {
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        const adapter = new PrismaPg(pool);
+        const prisma = new PrismaClient({ adapter });
+        
+        try {
+          const admin = await prisma.user.findUnique({ where: { email: 'admin@edunura.com' } });
+          if (admin) {
+            const hashedPassword = await hash(process.env.ADMIN_PASSWORD, 12);
+            await prisma.user.update({
+              where: { email: 'admin@edunura.com' },
+              data: { password: hashedPassword }
+            });
+            console.log('  → Admin password synced successfully!');
+          } else {
+            console.log('  → Admin user not found, skipping password sync.');
+          }
+        } catch (err) {
+          console.error('  → WARNING: Failed to sync admin password:', err.message);
+        } finally {
+          await prisma.\$disconnect();
+          await pool.end();
+        }
+      }
+      
+      syncPassword();
+    " 2>&1
+  fi
 fi
 
 # ─── Print Credentials ──────────────────────────────────────────────────────
