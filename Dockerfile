@@ -47,12 +47,13 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy standalone output
-COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma engine files, generated client, and CLI (needed for migrations)
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Copy generated Prisma client (custom output path in schema)
+COPY --from=builder /app/generated/prisma ./generated/prisma
+
+# Copy Prisma engine files and CLI (needed for migrations)
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/.package-lock.json ./node_modules/.package-lock.json

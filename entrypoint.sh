@@ -37,7 +37,7 @@ fi
 # ─── Seed Database (only if users table is empty) ───────────────────────────
 echo "[3/4] Checking if database needs seeding..."
 USER_COUNT=$(node -e "
-  const { PrismaClient } = require('./node_modules/.prisma/client');
+  const { PrismaClient } = require('./generated/prisma/client');
   const { PrismaPg } = require('./node_modules/@prisma/adapter-pg');
   const { Pool } = require('pg');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
