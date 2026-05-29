@@ -25,7 +25,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma Client
+# Generate Prisma Client (dummy DATABASE_URL required by Prisma 7.x config)
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
 
 # Build Next.js (standalone output)
@@ -58,6 +59,9 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Copy prisma schema + seed (needed at runtime for migrations)
 COPY --from=builder /app/prisma ./prisma
+
+# Copy prisma config (needed for Prisma 7.x datasource URL)
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/entrypoint.sh ./entrypoint.sh
