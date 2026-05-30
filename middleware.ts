@@ -45,7 +45,10 @@ export async function middleware(request: NextRequest) {
     return redirectResponse
   }
 
-  if (pathname === '/' && user) {
+  // If user is authenticated and on login page, redirect to dashboard
+  // BUT: if there is a ?token= query param, let the login page handle QR login first
+  const hasQrToken = request.nextUrl.searchParams.has('token')
+  if (pathname === '/' && user && !hasQrToken) {
     const redirectResponse = NextResponse.redirect(new URL('/dashboard', request.url))
     redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
     redirectResponse.headers.set('Pragma', 'no-cache')
