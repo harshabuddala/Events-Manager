@@ -185,19 +185,11 @@ export default function LoginPage() {
 
       setScanSuccess(true);
 
-      // Use the auto-login token for a reliable server-side redirect.
-      // The server validates and sets the session cookie securely.
-      const altToken = loginData.autoLoginToken;
-      if (altToken) {
-        setTimeout(() => {
-          window.location.replace(`/auto-login?token=${encodeURIComponent(altToken)}`);
-        }, 300);
-      } else {
-        // Fallback: direct dashboard redirect
-        setTimeout(() => {
-          window.location.replace('/dashboard');
-        }, 300);
-      }
+      // Server already set the session cookie via setSession() in the PUT handler.
+      // Redirect directly to dashboard — no need for /auto-login hop.
+      setTimeout(() => {
+        window.location.replace('/dashboard');
+      }, 500);
     } catch {
       setScanState('error');
       setScanError('Network error. Please check your connection and try again.');
