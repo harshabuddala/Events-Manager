@@ -148,44 +148,59 @@ export default function LoginPage() {
 
   const handleQrLogin = async (token: string) => {
     try {
-      const validateRes = await fetch(`/api/auth/qr-login?token=${encodeURIComponent(token)}`);
+      // Clear any existing session first
+      await fetch('/api/auth/clear-session', { method: 'POST', cache: 'no-store' }).catch(() => {});
+
+      // Validate the QR token
+      const validateRes = await fetch(`/api/auth/qr-login?token=${encodeURIComponent(token)}`, {
+        cache: 'no-store'
+      });
       if (!validateRes.ok) {
         setScanState('error');
-        setScanError('Invalid or expired QR code. Please generate a new one.');
+        setScanError('Invalid or expired QR code. Please ask admin to generate a new one.');
         return;
       }
 
+      // Consume the QR token to login
       const loginRes = await fetch('/api/auth/qr-login', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
+        cache: 'no-store',
       });
 
       if (!loginRes.ok) {
+        const errorData = await loginRes.json().catch(() => ({}));
         setScanState('error');
-        setScanError('Login failed. Please try again.');
+        setScanError(errorData.error || 'QR login failed. Please try again or use email/password.');
         return;
       }
 
       const loginData = await loginRes.json();
+      if (!loginData.success) {
+        setScanState('error');
+        setScanError('QR login failed. Please try again.');
+        return;
+      }
+
       setScanSuccess(true);
 
       // Use the auto-login token for a reliable server-side redirect.
-      // No cookie timing issues — the server validates and sets the session.
+      // The server validates and sets the session cookie securely.
       const altToken = loginData.autoLoginToken;
       if (altToken) {
         setTimeout(() => {
           window.location.replace(`/auto-login?token=${encodeURIComponent(altToken)}`);
-        }, 1200);
+        }, 300);
       } else {
-        // Fallback: direct dashboard redirect (may fail if cookie isn't ready)
+        // Fallback: direct dashboard redirect
         setTimeout(() => {
           window.location.replace('/dashboard');
-        }, 2000);
+        }, 300);
       }
     } catch {
       setScanState('error');
-      setScanError('Network error. Please try again.');
+      setScanError('Network error. Please check your connection and try again.');
     }
   };
 

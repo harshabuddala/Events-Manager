@@ -76,7 +76,7 @@ export async function createAutoLoginToken(user: UserPayload): Promise<string> {
   const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, role: user.role })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('30s')
+    .setExpirationTime('120s')
     .sign(getSecret())
 
   await prisma.authToken.create({
@@ -85,7 +85,7 @@ export async function createAutoLoginToken(user: UserPayload): Promise<string> {
       type: 'AUTO_LOGIN',
       userId: user.id,
       userType: user.role,
-      expiresAt: new Date(Date.now() + 30 * 1000),
+      expiresAt: new Date(Date.now() + 120 * 1000),
     },
   })
 

@@ -17,6 +17,8 @@ interface Props {
 
 const SCANNER_ELEMENT_ID = 'shared-qr-reader';
 
+type PermissionState = 'idle' | 'requesting' | 'granted' | 'denied' | 'error';
+
 export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunura_recent_scans' }: Props) {
   const router = useRouter();
 
@@ -50,7 +52,7 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameras, setCameras] = useState<Array<{ id: string; label: string }>>([]);
   const [selectedCamera, setSelectedCamera] = useState('');
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionState, setPermissionState] = useState<PermissionState>('idle');
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerStartedRef = useRef(false);
 
@@ -61,36 +63,61 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
     }
   }, []);
 
-  // Enumerate cameras + load recent scans
-  useEffect(() => {
-    Html5Qrcode.getCameras()
-      .then((devices) => {
-        if (devices && devices.length > 0) {
-          setCameras(devices);
-          const back = devices.find((d) =>
-            d.label.toLowerCase().includes('back') ||
-            d.label.toLowerCase().includes('rear') ||
-            d.label.toLowerCase().includes('environment')
-          );
-          setSelectedCamera(back?.id || devices[0].id);
-        } else {
-          setError('No cameras found on this device.');
-        }
-      })
-      .catch(() => setError('Unable to access cameras. Please check permissions.'));
+  // Request camera permission explicitly (triggers browser prompt)
+  const requestCameraPermission = useCallback(async () => {
+    setPermissionState('requesting');
+    setError('');
 
+    try {
+      // This is the KEY call that triggers the browser permission dialog
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      
+      // Permission granted! Stop this temporary stream
+      stream.getTracks().forEach(track => track.stop());
+
+      // Now enumerate cameras (they'll have labels now that permission is granted)
+      const devices = await Html5Qrcode.getCameras();
+      
+      if (devices && devices.length > 0) {
+        setCameras(devices);
+        const back = devices.find((d) =>
+          d.label.toLowerCase().includes('back') ||
+          d.label.toLowerCase().includes('rear') ||
+          d.label.toLowerCase().includes('environment')
+        );
+        setSelectedCamera(back?.id || devices[0].id);
+        setPermissionState('granted');
+      } else {
+        setPermissionState('error');
+        setError('No cameras found on this device.');
+      }
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionState('denied');
+      } else if (err.name === 'NotFoundError') {
+        setPermissionState('error');
+        setError('No camera found on this device.');
+      } else {
+        setPermissionState('error');
+        setError('Could not access camera. Please check your device settings.');
+      }
+    }
+  }, []);
+
+  // Load recent scans on mount
+  useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) setRecentScans(JSON.parse(saved));
     } catch { /* ignore */ }
   }, [storageKey]);
 
-  // Auto-start when ?autostart=true
+  // Auto-start when ?autostart=true AND permission is granted
   useEffect(() => {
-    if (autoStart && selectedCamera && !isScanning && !scannerStartedRef.current) {
+    if (autoStart && permissionState === 'granted' && selectedCamera && !isScanning && !scannerStartedRef.current) {
       setIsScanning(true);
     }
-  }, [autoStart, selectedCamera]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoStart, permissionState, selectedCamera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveRecentScan = useCallback((code: string) => {
     setRecentScans((prev) => {
@@ -147,7 +174,6 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
 
     setCameraLoading(true);
     setError('');
-    setPermissionDenied(false);
     let cancelled = false;
 
     const startAfterRender = async () => {
@@ -172,7 +198,7 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
       } catch (err: any) {
         if (!cancelled) {
           if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            setPermissionDenied(true);
+            setPermissionState('denied');
             setError('Camera access denied. Please enable camera permissions in your browser settings.');
           } else if (err.name === 'NotFoundError' || err.name === 'NotReadableError') {
             setError('Camera is in use by another application or not available.');
@@ -216,21 +242,29 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
               <p className="text-xs text-slate-500 mt-0.5">Point camera at student&apos;s QR code</p>
             </div>
             <button
-              onClick={() => setIsScanning((v) => !v)}
-              disabled={cameraLoading}
+              onClick={() => {
+                if (permissionState !== 'granted') {
+                  requestCameraPermission();
+                } else {
+                  setIsScanning((v) => !v);
+                }
+              }}
+              disabled={cameraLoading || permissionState === 'requesting'}
               className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors active:scale-95 ${
                 isScanning ? 'bg-rose-50 text-rose-600 border border-rose-200' : t.startBtn
               }`}
             >
-              {cameraLoading
+              {cameraLoading || permissionState === 'requesting'
                 ? <><RefreshCw className="w-4 h-4 animate-spin" /> Starting...</>
                 : isScanning
                   ? <><Camera className="w-4 h-4" /> Stop Camera</>
-                  : <><Camera className="w-4 h-4" /> Start Camera</>}
+                  : permissionState === 'granted'
+                    ? <><Camera className="w-4 h-4" /> Start Camera</>
+                    : <><Camera className="w-4 h-4" /> Allow Camera</>}
             </button>
           </div>
 
-          {cameras.length > 1 && !isScanning && (
+          {cameras.length > 1 && !isScanning && permissionState === 'granted' && (
             <div className="mb-3">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
                 Select Camera
@@ -250,7 +284,7 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
           )}
 
           {/* Scanner container — always in DOM */}
-          <div className="relative rounded-2xl overflow-hidden bg-slate-900" style={{ minHeight: '200px' }}>
+          <div className="relative rounded-2xl overflow-hidden bg-slate-900" style={{ minHeight: '280px' }}>
             <div
               id={SCANNER_ELEMENT_ID}
               style={{
@@ -263,22 +297,85 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
               }}
             />
 
-            {!isScanning && !cameraLoading && (
+            {/* Permission Request State */}
+            {permissionState === 'idle' && !isScanning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6">
+                <Camera className="w-12 h-12 text-violet-500 mb-4" />
+                <p className="text-base font-bold text-slate-800 mb-2">Camera Access Required</p>
+                <p className="text-sm text-slate-500 text-center mb-4">
+                  We need your permission to use the camera for scanning QR codes.
+                </p>
+                <button
+                  onClick={requestCameraPermission}
+                  className={`flex items-center gap-2 ${t.primary} text-white px-6 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95`}
+                >
+                  <Camera className="w-4 h-4" />
+                  Allow Camera Access
+                </button>
+              </div>
+            )}
+
+            {/* Requesting Permission State */}
+            {permissionState === 'requesting' && !isScanning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-violet-200 rounded-2xl">
+                <div className="w-10 h-10 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
+                <p className="text-sm font-medium text-slate-600">Requesting camera permission...</p>
+                <p className="text-xs text-slate-400 mt-2">Check your browser prompt</p>
+              </div>
+            )}
+
+            {/* Permission Denied State */}
+            {permissionState === 'denied' && !isScanning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-50 border-2 border-dashed border-rose-200 rounded-2xl p-6">
+                <Camera className="w-12 h-12 text-rose-400 mb-3" />
+                <p className="text-base font-bold text-rose-700 mb-2">Camera Access Denied</p>
+                <p className="text-sm text-rose-600 text-center mb-4">
+                  Please allow camera access in your browser settings to scan QR codes.
+                </p>
+                <div className="text-xs text-rose-500 bg-rose-100/50 rounded-lg p-3 mb-4 w-full">
+                  <p className="font-semibold mb-1">How to enable:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Tap the lock icon in your browser address bar</li>
+                    <li>Select &quot;Allow&quot; for camera permissions</li>
+                    <li>Refresh the page and try again</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={requestCameraPermission}
+                  className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {/* Error State */}
+            {permissionState === 'error' && !isScanning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6">
+                <AlertCircle className="w-12 h-12 text-amber-500 mb-3" />
+                <p className="text-base font-bold text-slate-800 mb-2">Camera Error</p>
+                <p className="text-sm text-slate-500 text-center mb-4">{error || 'Could not access camera.'}</p>
+                <button
+                  onClick={requestCameraPermission}
+                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Idle state when permission granted but camera not started */}
+            {permissionState === 'granted' && !isScanning && !cameraLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl">
                 <ScanLine className="w-12 h-12 text-slate-300 mb-3" />
                 <p className="text-sm font-medium text-slate-500">Camera preview area</p>
                 <p className="text-xs text-slate-400 mt-1">Click &quot;Start Camera&quot; to begin scanning</p>
-                {permissionDenied && (
-                  <div className="mt-4 mx-4 text-center">
-                    <p className="text-xs text-rose-500 font-medium mb-2">Camera permission was denied</p>
-                    <p className="text-[10px] text-slate-400">
-                      Go to your browser settings and allow camera access for this site.
-                    </p>
-                  </div>
-                )}
               </div>
             )}
 
+            {/* Scanning Active Overlay */}
             {isScanning && (
               <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-52 h-52 sm:w-64 sm:h-64">
