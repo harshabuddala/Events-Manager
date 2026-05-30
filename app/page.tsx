@@ -15,7 +15,7 @@ type ScanState = 'idle' | 'requesting' | 'granted' | 'denied' | 'error';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<'form' | 'scan'>('form');
+  const [mode, setMode] = useState<'form' | 'scan' | 'processing'>('form');
 
   // Form login state
   const [showPassword, setShowPassword] = useState(false);
@@ -137,8 +137,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     if (token) {
-      setMode('scan');
-      setScanState('requesting');
+      setMode('processing');
       handleQrLogin(token).finally(() => {
          window.history.replaceState({}, '', '/');
       });
@@ -406,6 +405,46 @@ export default function LoginPage() {
                   Ask an admin to generate a login QR from their dashboard
                 </p>
               </div>
+            </>
+          ) : mode === 'processing' ? (
+            /* External QR Processing Mode */
+            <>
+              <div className="mb-4">
+                <button
+                  onClick={() => setMode('form')}
+                  className="flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to email login
+                </button>
+              </div>
+
+              {scanState === 'error' || scanError ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <AlertCircle className="w-12 h-12 text-amber-500 mb-3" />
+                  <p className="text-base font-bold text-slate-800 mb-2">QR Login Failed</p>
+                  <p className="text-sm text-slate-500 text-center mb-5 max-w-xs">{scanError || 'Invalid or expired QR code.'}</p>
+                  <button
+                    onClick={() => { setMode('form'); setScanState('idle'); setScanError(''); }}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Login
+                  </button>
+                </div>
+              ) : scanSuccess ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <CheckCircle2 className="w-14 h-14 text-emerald-600 mb-3" />
+                  <p className="text-lg font-bold text-emerald-800 mb-1">Login successful!</p>
+                  <p className="text-sm text-emerald-600">Redirecting to dashboard...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-12 h-12 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-4" />
+                  <p className="text-base font-bold text-slate-800 mb-1">Logging you in...</p>
+                  <p className="text-sm text-slate-500">Please wait while we verify your QR code</p>
+                </div>
+              )}
             </>
           ) : (
             /* QR Scan Mode */
