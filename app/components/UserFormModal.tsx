@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, User, Phone, Shield, UserCheck, ShieldAlert } from 'lucide-react';
+import { X, Mail, Lock, User, Phone, Shield, UserCheck, ShieldAlert, Eye, EyeOff, Check, Circle } from 'lucide-react';
 
 interface UserFormData {
   name: string;
@@ -37,6 +37,8 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [showPassword, setShowPassword] = useState(false);
+
   useEffect(() => {
     if (editUser) {
       setFormData({
@@ -54,6 +56,7 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
         role: 'VOLUNTEER',
         phoneNumber: '',
       });
+      setShowPassword(false);
     }
     setError('');
     setTouched({});
@@ -69,7 +72,12 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
         return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? 'Invalid email format' : '';
       case 'password':
         if (!editUser && !value) return 'Password is required';
-        if (value && value.length < 6) return 'Password must be at least 6 characters';
+        if (!value) return '';
+        if (value.length < 8) return 'At least 8 characters';
+        if (!/[A-Z]/.test(value)) return 'Must contain an uppercase letter';
+        if (!/[a-z]/.test(value)) return 'Must contain a lowercase letter';
+        if (!/[0-9]/.test(value)) return 'Must contain a number';
+        if (!/[^A-Za-z0-9]/.test(value)) return 'Must contain a special character';
         return '';
       default:
         return '';
@@ -192,15 +200,46 @@ export default function UserFormModal({ isOpen, onClose, onSubmit, editUser }: U
               <div className="relative">
                 <Lock className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${touched.password && errors.password ? 'text-rose-400' : 'text-slate-400'}`} />
                 <input
-                  id="password" type="password"
+                  id="password" type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleChange('password', e.target.value)}
                   onBlur={() => handleBlur('password')}
                   placeholder="••••••••"
-                  className={inputClass('password')}
+                  className={inputClass('password') + ' pr-10'}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               {touched.password && errors.password && <p className="text-[11px] text-rose-500 font-medium">{errors.password}</p>}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-1.5">
+                {[
+                  { rule: '8+ characters', test: (v: string) => v.length >= 8 },
+                  { rule: 'Uppercase letter', test: (v: string) => /[A-Z]/.test(v) },
+                  { rule: 'Lowercase letter', test: (v: string) => /[a-z]/.test(v) },
+                  { rule: 'Number', test: (v: string) => /[0-9]/.test(v) },
+                  { rule: 'Special character', test: (v: string) => /[^A-Za-z0-9]/.test(v) },
+                ].map(({ rule, test }) => {
+                  const passed = test(formData.password);
+                  return (
+                    <div key={rule} className="flex items-center gap-1.5">
+                      {passed ? (
+                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Circle className="w-3 h-3 text-slate-300 shrink-0" />
+                      )}
+                      <span className={`text-[11px] font-medium ${passed ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {rule}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
