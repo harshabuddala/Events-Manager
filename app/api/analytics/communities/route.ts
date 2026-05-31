@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 export async function GET() {
   try {
     const session = await getSession()
-    if (!session || session.role !== 'ADMIN') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -13,6 +13,16 @@ export async function GET() {
       include: {
         events: {
           include: {
+            registrations: {
+              include: {
+                student: { select: { id: true, name: true } },
+                stallVisits: {
+                  include: {
+                    performance: { select: { score: true } },
+                  },
+                },
+              },
+            },
             _count: { select: { registrations: true } },
           },
         },
@@ -21,11 +31,30 @@ export async function GET() {
 
     const communityRankings = communities
       .map(c => {
-        const totalParticipants = c.events.reduce((sum, e) => sum + e._count.registrations, 0)
-        const score = totalParticipants > 0
-          ? Math.min(99, Math.round(70 + (totalParticipants / 10) * 10))
+        const allRegistrations = c.events.flatMap(e => e.registrations)
+        const totalParticipants = allRegistrations.length
+        
+        if (totalParticipants === 0) {
+          return { id: c.id, name: c.name, participants: 0, score: 0 }
+        }
+
+        const completed = allRegistrations.filter(r => r.status === 'COMPLETED').length
+        const completionRate = Math.round((completed / totalParticipants) * 100)
+
+        const allScores: number[] = []
+        allRegistrations.forEach(r => {
+          r.stallVisits.forEach(v => {
+            if (v.performance?.score != null) allScores.push(v.performance.score)
+          })
+        })
+
+        const avgScore = allScores.length > 0
+          ? Math.round((allScores.reduce((a, b) => a + b, 0) / allScores.length) * 10)
           : 0
-        return { id: c.id, name: c.name, participants: totalParticipants, score }
+
+        const score = Math.round((completionRate * 0.6) + (avgScore * 0.4))
+
+        return { id: c.id, name: c.name, participants: totalParticipants, score, completed }
       })
       .sort((a, b) => b.score - a.score)
       .map((c, idx) => ({ ...c, rank: idx + 1 }))
