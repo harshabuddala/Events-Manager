@@ -26,6 +26,14 @@ interface Stats {
   hoursWorked: number;
 }
 
+interface RecentActivityItem {
+  id: string;
+  studentRoll: string;
+  stallName: string;
+  score: number;
+  time: string;
+}
+
 export default function VolunteerDashboardView() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -35,6 +43,7 @@ export default function VolunteerDashboardView() {
     avgRating: 0,
     hoursWorked: 0
   });
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -51,7 +60,8 @@ export default function VolunteerDashboardView() {
         const statsRes = await fetch('/api/volunteer/stats');
         if (statsRes.ok) {
           const data = await statsRes.json();
-          setStats(data.stats);
+          setStats(data.stats || stats);
+          setRecentActivity(data.recentActivity || []);
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -66,13 +76,11 @@ export default function VolunteerDashboardView() {
     icon: Icon, 
     label, 
     value, 
-    change, 
     color = 'violet' 
   }: { 
     icon: any, 
     label: string, 
     value: string | number, 
-    change?: string, 
     color?: string 
   }) => {
     const colorMap: Record<string, { bg: string, border: string, text: string }> = {
@@ -85,15 +93,8 @@ export default function VolunteerDashboardView() {
 
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-[0_2px_12px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] transition-shadow">
-        <div className="flex items-start justify-between mb-2 sm:mb-3">
-          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${colors.bg} border ${colors.border} flex items-center justify-center shrink-0`}>
-            <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${colors.text}`} />
-          </div>
-          {change && (
-            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">
-              {change}
-            </span>
-          )}
+        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${colors.bg} border ${colors.border} flex items-center justify-center shrink-0 mb-2 sm:mb-3`}>
+          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${colors.text}`} />
         </div>
         <div className="space-y-0.5">
           <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
@@ -119,7 +120,6 @@ export default function VolunteerDashboardView() {
           icon={CheckCircle2}
           label="Today's Evaluations"
           value={stats.todayEvaluations}
-          change="+12%"
           color="emerald"
         />
         <StatCard 
@@ -257,24 +257,28 @@ export default function VolunteerDashboardView() {
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-[0_2px_12px_rgb(0,0,0,0.04)]">
         <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-3 sm:mb-4">Recent Activity</h3>
         <div className="space-y-2 sm:space-y-3">
-          <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-50 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          {recentActivity.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-400">No recent evaluations</p>
+              <p className="text-xs text-slate-400 mt-1">Your evaluations will appear here once you start scanning.</p>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-medium text-slate-800 truncate">Evaluated student #REG-001</p>
-              <p className="text-[10px] sm:text-xs text-slate-500">Science Stall • 2 minutes ago</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-50 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-              <Clock className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-medium text-slate-800 truncate">Shift started at Math Stall</p>
-              <p className="text-[10px] sm:text-xs text-slate-500">1 hour ago</p>
-            </div>
-          </div>
+          ) : (
+            recentActivity.map((activity) => (
+              <div key={activity.id} className="flex items-center gap-3 p-2.5 sm:p-3 bg-slate-50 rounded-xl">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-slate-800 truncate">
+                    Evaluated #{activity.studentRoll}
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-slate-500">
+                    {activity.stallName} • Score: {activity.score.toFixed(1)} • {activity.time}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
