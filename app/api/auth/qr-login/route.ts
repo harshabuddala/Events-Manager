@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession, setSession, createAutoLoginToken } from '@/lib/auth'
+import { getSession, createToken } from '@/lib/auth'
 import { randomBytes } from 'crypto'
 
 /**
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ token })
   } catch (error) {
-    console.error('QR login generate error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('QR login generate error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
       })
     }
   } catch (error) {
-    console.error('QR login validate error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('QR login validate error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -180,12 +180,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    await setSession(userPayload)
-    const autoLoginToken = await createAutoLoginToken(userPayload)
-
-    return NextResponse.json({
+    const sessionToken = await createToken(userPayload)
+    const response = NextResponse.json({
       success: true,
-      autoLoginToken,
       user: {
         id: userPayload.id,
         name: userPayload.name,
@@ -193,8 +190,16 @@ export async function PUT(request: NextRequest) {
         role: userPayload.role,
       },
     })
+    response.cookies.set('auth-token', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    })
+    return response
   } catch (error) {
-    console.error('QR login consume error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('QR login consume error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

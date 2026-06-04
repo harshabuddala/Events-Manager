@@ -132,8 +132,6 @@ export default function LoginPage() {
   }, [mode, scanState, selectedCamera, scanSuccess]);
 
   useEffect(() => {
-    fetch('/api/auth/clear-session', { method: 'POST', cache: 'no-store' }).catch(() => {})
-    
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     if (token) {
