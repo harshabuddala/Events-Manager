@@ -53,11 +53,53 @@ export default function ScanClientPage({
   const [stallId, setStallId] = useState(defaultStallId)
   const [score, setScore] = useState(8)
   const [grade, setGrade] = useState('A')
+  const [metricScores, setMetricScores] = useState<Record<string, number>>({})
   const [remarks, setRemarks] = useState('')
-  
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  const selectedStall: any = (() => {
+    if (!stallId) return null
+    return registration.event.stalls.find((s: any) => s.id === stallId) || null
+  })()
+  const selectedStallMetrics: string[] = Array.isArray(selectedStall?.metrics)
+    ? (selectedStall.metrics as unknown[]).filter((m): m is string => typeof m === 'string')
+    : []
+
+  React.useEffect(() => {
+    if (selectedStallMetrics.length === 0) {
+      if (Object.keys(metricScores).length > 0) setMetricScores({})
+      return
+    }
+    setMetricScores(prev => {
+      const next: Record<string, number> = {}
+      for (const m of selectedStallMetrics) {
+        next[m] = prev[m] ?? 0
+      }
+      const sameKeys = Object.keys(prev).length === selectedStallMetrics.length &&
+        selectedStallMetrics.every(m => m in prev)
+      return sameKeys ? prev : next
+    })
+  }, [stallId, registration])
+
+  const derivePreview = (m: Record<string, number>) => {
+    const values = Object.values(m).filter(v => v > 0)
+    if (values.length === 0) return { score: 0, grade: '—' }
+    const avg = values.reduce((a, b) => a + b, 0) / values.length
+    const score = Math.round(avg * 2 * 10) / 10
+    let g = 'E'
+    if (score >= 9) g = 'A+'
+    else if (score >= 8) g = 'A'
+    else if (score >= 7) g = 'B'
+    else if (score >= 6) g = 'C'
+    else if (score >= 5) g = 'D'
+    return { score, grade: g }
+  }
+  const metricPreview = derivePreview(metricScores)
+  const allMetricsRated = selectedStallMetrics.length > 0 &&
+    selectedStallMetrics.every(m => metricScores[m] && metricScores[m] >= 1)
 
   const handleRateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,20 +108,28 @@ export default function ScanClientPage({
       return
     }
 
+    if (selectedStallMetrics.length > 0 && !allMetricsRated) {
+      setError('Please rate every metric (1-5 stars).')
+      return
+    }
+
     setLoading(true)
     setError('')
     setSuccess('')
 
     try {
+      const payload: Record<string, unknown> = { stallId, remarks }
+      if (selectedStallMetrics.length > 0) {
+        payload.metricScores = metricScores
+      } else {
+        payload.score = Number(score)
+        payload.grade = grade
+      }
+
       const res = await fetch(`/api/scan/${registration.registrationCode}/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stallId,
-          score: Number(score),
-          grade,
-          remarks
-        })
+        body: JSON.stringify(payload)
       })
 
       const data = await res.json()
@@ -295,46 +345,100 @@ export default function ScanClientPage({
                     </select>
                   </div>
 
-                  {/* Score Input */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs sm:text-sm font-bold text-slate-700">Score <span className="text-slate-400 font-normal">(1-10)</span></label>
-                      <span className="text-sm sm:text-base font-extrabold text-violet-600 bg-violet-50 px-3 py-1 rounded-xl border border-violet-100 font-mono">
-                        {score} / 10
-                      </span>
+                  {/* Per-metric star ratings (only when the stall has metrics configured) */}
+                  {selectedStallMetrics.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs sm:text-sm font-bold text-slate-700">
+                          Star Ratings <span className="text-slate-400 font-normal">(per metric)</span>
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] sm:text-xs font-extrabold text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-lg font-mono">
+                            {metricPreview.score > 0 ? `${metricPreview.score}/10` : '—/10'}
+                          </span>
+                          <span className="text-[10px] sm:text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">
+                            Grade {metricPreview.grade}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="space-y-2.5">
+                        {selectedStallMetrics.map((metric) => {
+                          const value = metricScores[metric] || 0
+                          return (
+                            <div key={metric} className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                              <span className="text-xs sm:text-sm font-semibold text-slate-700 capitalize truncate">{metric}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {[1, 2, 3, 4, 5].map((n) => {
+                                  const filled = n <= value
+                                  return (
+                                    <button
+                                      key={n}
+                                      type="button"
+                                      onClick={() => {
+                                        setMetricScores(prev => ({ ...prev, [metric]: n }))
+                                        if (error) setError('')
+                                        if (success) setSuccess('')
+                                      }}
+                                      className="p-0.5 transition-transform active:scale-90"
+                                      aria-label={`Rate ${metric} ${n} star${n > 1 ? 's' : ''}`}
+                                    >
+                                      <Star
+                                        className={`w-5 h-5 ${filled ? 'text-amber-500 fill-amber-400' : 'text-slate-300'}`}
+                                      />
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium">Overall score is auto-calculated as the average of all star ratings × 2.</p>
                     </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      step="0.5"
-                      value={score}
-                      onChange={e => { setScore(Number(e.target.value)); setError(''); setSuccess(''); }}
-                      className="w-full accent-violet-600 h-2.5 bg-slate-100 rounded-lg cursor-pointer appearance-none"
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-400 font-bold px-1 uppercase tracking-wider">
-                      <span>1 (Poor)</span>
-                      <span>5 (Average)</span>
-                      <span>10 (Excellent)</span>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* Score Input (fallback for stalls without metrics) */}
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs sm:text-sm font-bold text-slate-700">Score <span className="text-slate-400 font-normal">(1-10)</span></label>
+                          <span className="text-sm sm:text-base font-extrabold text-violet-600 bg-violet-50 px-3 py-1 rounded-xl border border-violet-100 font-mono">
+                            {score} / 10
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="0.5"
+                          value={score}
+                          onChange={e => { setScore(Number(e.target.value)); setError(''); setSuccess(''); }}
+                          className="w-full accent-violet-600 h-2.5 bg-slate-100 rounded-lg cursor-pointer appearance-none"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-400 font-bold px-1 uppercase tracking-wider">
+                          <span>1 (Poor)</span>
+                          <span>5 (Average)</span>
+                          <span>10 (Excellent)</span>
+                        </div>
+                      </div>
 
-                  {/* Grade Dropdown */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs sm:text-sm font-bold text-slate-700">Performance Grade <span className="text-rose-500">*</span></label>
-                    <select
-                      value={grade}
-                      onChange={e => { setGrade(e.target.value); setError(''); setSuccess(''); }}
-                      className="w-full px-3.5 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800 font-bold"
-                    >
-                      <option value="A+">Grade A+ (Outstanding)</option>
-                      <option value="A">Grade A (Excellent)</option>
-                      <option value="B">Grade B (Good)</option>
-                      <option value="C">Grade C (Satisfactory)</option>
-                      <option value="D">Grade D (Needs Improvement)</option>
-                      <option value="E">Grade E (Unsatisfactory)</option>
-                    </select>
-                  </div>
+                      {/* Grade Dropdown */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs sm:text-sm font-bold text-slate-700">Performance Grade <span className="text-rose-500">*</span></label>
+                        <select
+                          value={grade}
+                          onChange={e => { setGrade(e.target.value); setError(''); setSuccess(''); }}
+                          className="w-full px-3.5 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800 font-bold"
+                        >
+                          <option value="A+">Grade A+ (Outstanding)</option>
+                          <option value="A">Grade A (Excellent)</option>
+                          <option value="B">Grade B (Good)</option>
+                          <option value="C">Grade C (Satisfactory)</option>
+                          <option value="D">Grade D (Needs Improvement)</option>
+                          <option value="E">Grade E (Unsatisfactory)</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
 
                   {/* Remarks */}
                   <div className="space-y-1.5">
@@ -477,16 +581,47 @@ export default function ScanClientPage({
                           )}
                         </div>
 
-                        {perf && (
-                          <div className="mt-2 text-[11px] sm:text-xs bg-white border border-slate-100 rounded-xl p-2.5 sm:p-3 text-slate-500 leading-normal italic">
-                            {perf.remarks ? `"${perf.remarks}"` : '"Evaluated successfully with standard criteria."'}
-                            {perf.volunteer && (
-                              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 block mt-1.5 uppercase not-italic">
-                                Evaluator: {perf.volunteer.name}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        {perf && (() => {
+                          const metricScoresData = perf.metricScores && typeof perf.metricScores === 'object'
+                            ? (perf.metricScores as Record<string, unknown>)
+                            : null
+                          const metricEntries = metricScoresData
+                            ? Object.entries(metricScoresData).filter(([, v]) => typeof v === 'number')
+                            : []
+                          return (
+                            <div className="mt-2 space-y-2">
+                              {metricEntries.length > 0 && (
+                                <div className="bg-white border border-slate-100 rounded-xl p-2.5 sm:p-3 space-y-1.5">
+                                  {metricEntries.map(([name, value]) => {
+                                    const n = Number(value) || 0
+                                    return (
+                                      <div key={name} className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] sm:text-xs font-semibold text-slate-700 capitalize truncate">{name}</span>
+                                        <div className="flex items-center gap-0.5 shrink-0">
+                                          {[1, 2, 3, 4, 5].map((i) => (
+                                            <Star
+                                              key={i}
+                                              className={`w-3.5 h-3.5 ${i <= n ? 'text-amber-500 fill-amber-400' : 'text-slate-200'}`}
+                                            />
+                                          ))}
+                                          <span className="text-[10px] font-mono text-slate-500 ml-1.5">{n}/5</span>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              <div className="text-[11px] sm:text-xs bg-white border border-slate-100 rounded-xl p-2.5 sm:p-3 text-slate-500 leading-normal italic">
+                                {perf.remarks ? `"${perf.remarks}"` : '"Evaluated successfully with standard criteria."'}
+                                {perf.volunteer && (
+                                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 block mt-1.5 uppercase not-italic">
+                                    Evaluator: {perf.volunteer.name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                   )

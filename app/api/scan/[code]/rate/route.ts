@@ -5,10 +5,87 @@ import { z } from 'zod'
 
 const rateSchema = z.object({
   stallId: z.string().min(1, 'Stall is required'),
-  score: z.number().min(1).max(10),
-  grade: z.string().min(1, 'Grade is required').max(10),
+  score: z.number().min(1).max(10).optional(),
+  grade: z.string().min(1).max(10).optional(),
+  metricScores: z.record(z.string(), z.number().int().min(1).max(5)).optional(),
   remarks: z.string().optional().or(z.literal('')),
 })
+
+function deriveScoreAndGrade(
+  metricScores: Record<string, number>
+): { score: number; grade: string } {
+  const values = Object.values(metricScores)
+  if (values.length === 0) {
+    return { score: 5, grade: 'D' }
+  }
+  const avgStars = values.reduce((a, b) => a + b, 0) / values.length
+  const score = Math.round(avgStars * 2 * 10) / 10
+  let grade = 'E'
+  if (score >= 9) grade = 'A+'
+  else if (score >= 8) grade = 'A'
+  else if (score >= 7) grade = 'B'
+  else if (score >= 6) grade = 'C'
+  else if (score >= 5) grade = 'D'
+  return { score, grade }
+}
+
+async function resolveEvaluationPayload(
+  stallId: string,
+  provided: { score?: number; grade?: string; metricScores?: Record<string, number> }
+): Promise<
+  | { ok: true; score: number; grade: string; metricScores: Record<string, number> | null }
+  | { ok: false; error: string; status: number }
+> {
+  const stall = await prisma.stall.findUnique({
+    where: { id: stallId },
+    select: { metrics: true },
+  })
+  if (!stall) {
+    return { ok: false, error: 'Stall not found', status: 404 }
+  }
+
+  const configuredMetrics = Array.isArray(stall.metrics)
+    ? (stall.metrics as unknown[]).filter((m): m is string => typeof m === 'string')
+    : []
+
+  if (configuredMetrics.length > 0) {
+    if (!provided.metricScores) {
+      return {
+        ok: false,
+        error: 'This stall requires star ratings for each configured metric.',
+        status: 400,
+      }
+    }
+    const missing = configuredMetrics.filter((m) => !(m in provided.metricScores!))
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        error: `Missing star ratings for: ${missing.join(', ')}`,
+        status: 400,
+      }
+    }
+    const extra = Object.keys(provided.metricScores).filter(
+      (k) => !configuredMetrics.includes(k)
+    )
+    const sanitized: Record<string, number> = {}
+    for (const m of configuredMetrics) {
+      sanitized[m] = provided.metricScores[m]
+    }
+    void extra
+    const { score, grade } = deriveScoreAndGrade(sanitized)
+    return { ok: true, score, grade, metricScores: sanitized }
+  }
+
+  if (provided.score == null || !provided.grade) {
+    return { ok: false, error: 'Score and grade are required', status: 400 }
+  }
+  return {
+    ok: true,
+    score: provided.score,
+    grade: provided.grade,
+    metricScores: provided.metricScores ?? null,
+  }
+}
 
 export async function POST(
   request: NextRequest,
@@ -23,14 +100,13 @@ export async function POST(
     const { code } = await params
     const body = await request.json()
     const result = rateSchema.safeParse(body)
-    
+
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
     }
 
-    const { stallId, score, grade, remarks } = result.data
+    const { stallId, remarks, metricScores, score, grade } = result.data
 
-    // Fetch the registration using the registration code
     const registration = await prisma.registration.findUnique({
       where: { registrationCode: code },
       include: { student: true, event: { include: { stalls: true } } }
@@ -40,7 +116,11 @@ export async function POST(
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
     }
 
-    // Determine volunteer context based on logged-in user
+    const resolved = await resolveEvaluationPayload(stallId, { score, grade, metricScores })
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+    }
+
     let volunteer = null
     if (session.role === 'VOLUNTEER' || session.role === 'LEAD_EVALUATOR' || session.role === 'COORDINATOR') {
       volunteer = await prisma.volunteer.findUnique({
@@ -50,7 +130,6 @@ export async function POST(
         return NextResponse.json({ error: 'Volunteer record not found. Please contact administration.' }, { status: 403 })
       }
     } else {
-      // Admins/Managers: find a volunteer assigned to this event
       const eventVolunteer = await prisma.volunteerAssignment.findFirst({
         where: { eventId: registration.eventId },
         include: { volunteer: true }
@@ -59,7 +138,6 @@ export async function POST(
       if (eventVolunteer) {
         volunteer = eventVolunteer.volunteer
       } else {
-        // Fallback: find any volunteer in the system
         volunteer = await prisma.volunteer.findFirst()
       }
 
@@ -68,7 +146,6 @@ export async function POST(
       }
     }
 
-    // 1. Find or create StallVisit record
     let stallVisit = await prisma.stallVisit.findUnique({
       where: {
         registrationId_stallId: {
@@ -94,7 +171,6 @@ export async function POST(
         include: { performance: true }
       })
     } else {
-      // Mark it as completed if not done
       stallVisit = await prisma.stallVisit.update({
         where: { id: stallVisit.id },
         data: { completedAt: new Date() },
@@ -102,50 +178,46 @@ export async function POST(
       })
     }
 
-    // 2. Upsert the Performance record
     const performance = await prisma.performance.upsert({
       where: { stallVisitId: stallVisit.id },
       update: {
         volunteerId: volunteer.id,
-        score: parseFloat(score.toString()),
-        grade,
+        score: resolved.score,
+        grade: resolved.grade,
+        metricScores: resolved.metricScores ?? undefined,
         remarks: remarks || ''
       },
       create: {
         stallVisitId: stallVisit.id,
         volunteerId: volunteer.id,
-        score: parseFloat(score.toString()),
-        grade,
+        score: resolved.score,
+        grade: resolved.grade,
+        metricScores: resolved.metricScores ?? undefined,
         remarks: remarks || ''
       }
     })
 
-    // 3. Check if all stalls are completed
     const totalStalls = registration.event.stalls?.length || 0;
-    
-    // Fetch all stall visits for this registration that have a performance
+
     const allVisits = await prisma.stallVisit.findMany({
       where: { registrationId: registration.id },
       include: { performance: true }
     });
-    
+
     const gradedVisits = allVisits.filter(v => v.performance !== null);
     const isCompleted = totalStalls > 0 && gradedVisits.length >= totalStalls;
-    
+
     if (isCompleted) {
-      // Calculate overall score
       const totalScore = gradedVisits.reduce((acc, curr) => acc + (curr.performance?.score || 0), 0);
       const avgScore = totalScore / gradedVisits.length;
-      
-      // Determine overall grade
+
       let overallGrade = 'E';
       if (avgScore >= 9) overallGrade = 'A+';
       else if (avgScore >= 8) overallGrade = 'A';
       else if (avgScore >= 7) overallGrade = 'B';
       else if (avgScore >= 6) overallGrade = 'C';
       else if (avgScore >= 5) overallGrade = 'D';
-      
-      // Determine top skill (stall with highest score)
+
       let topSkill = 'None';
       let highestScore = -1;
       for (const visit of gradedVisits) {
@@ -155,8 +227,7 @@ export async function POST(
           if (stallInfo) topSkill = `${stallInfo.name} (${(highestScore / 10) * 100}%)`;
         }
       }
-      
-      // Check if report card exists
+
       const existingReport = await prisma.reportCard.findFirst({
         where: { studentId: registration.studentId, eventId: registration.eventId }
       });
@@ -188,7 +259,6 @@ export async function POST(
         data: { status: 'COMPLETED', completedAt: new Date() }
       })
     } else {
-      // Keep registration status updated (e.g. IN_PROGRESS)
       await prisma.registration.update({
         where: { id: registration.id },
         data: { status: 'IN_PROGRESS' }
@@ -197,7 +267,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, performance })
   } catch (error) {
-    console.error('Rating performance error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('Rating performance error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -213,7 +283,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Only admins/managers can edit evaluations
     if (!['ADMIN', 'MANAGER'].includes(session.role)) {
       return NextResponse.json({ error: 'Only admins can edit evaluations' }, { status: 403 })
     }
@@ -226,7 +295,7 @@ export async function PATCH(
       return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
     }
 
-    const { stallId, score, grade, remarks } = result.data
+    const { stallId, remarks, metricScores, score, grade } = result.data
 
     const registration = await prisma.registration.findUnique({
       where: { registrationCode: code },
@@ -237,7 +306,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
     }
 
-    // Find the existing stall visit
+    const resolved = await resolveEvaluationPayload(stallId, { score, grade, metricScores })
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+    }
+
     const stallVisit = await prisma.stallVisit.findUnique({
       where: {
         registrationId_stallId: {
@@ -252,17 +325,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'No existing evaluation found to edit' }, { status: 404 })
     }
 
-    // Update the performance record
     const performance = await prisma.performance.update({
       where: { id: stallVisit.performance.id },
       data: {
-        score: parseFloat(score.toString()),
-        grade,
+        score: resolved.score,
+        grade: resolved.grade,
+        metricScores: resolved.metricScores ?? undefined,
         remarks: remarks || ''
       }
     })
 
-    // Recalculate report card if all stalls are completed
     const totalStalls = registration.event.stalls?.length || 0
     const allVisits = await prisma.stallVisit.findMany({
       where: { registrationId: registration.id },
@@ -306,7 +378,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, performance })
   } catch (error) {
-    console.error('Edit evaluation error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('Edit evaluation error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

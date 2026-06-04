@@ -173,6 +173,7 @@ model Stall {
   icon          String?
   maxVolunteers Int         @default(5)
   status        StallStatus @default(ACTIVE)
+  metrics       Json?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -217,7 +218,7 @@ model VolunteerAssignment {
 
   // Relations
   event     Event     @relation(fields: [eventId], references: [id])
-  stall     Stall     @relation(fields: [stallId], references: [id])
+  stall     Stall     @relation(fields: [stallId], references: [id], onDelete: Cascade)
   volunteer Volunteer @relation(fields: [volunteerId], references: [id])
 
   @@unique([eventId, stallId, volunteerId])
@@ -236,7 +237,7 @@ model StallVisit {
 
   // Relations
   registration Registration @relation(fields: [registrationId], references: [id])
-  stall        Stall        @relation(fields: [stallId], references: [id])
+  stall        Stall        @relation(fields: [stallId], references: [id], onDelete: Cascade)
   student      Student      @relation(fields: [studentId], references: [id])
   performance  Performance?
 
@@ -256,6 +257,7 @@ model Performance {
   problemSolving  Int?
   communication   Int?
   learningAbility Int?
+  metricScores    Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

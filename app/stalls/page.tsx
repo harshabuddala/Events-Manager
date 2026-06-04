@@ -18,6 +18,7 @@ interface Stall {
   eventCount: number;
   totalVisits: number;
   assignedVolunteers: number;
+  metrics?: string[];
 }
 
 export default function StallsPage() {
@@ -44,7 +45,7 @@ export default function StallsPage() {
     fetchStalls();
   }, [fetchStalls]);
 
-  const handleCreate = async (data: { name: string }) => {
+  const handleCreate = async (data: { name: string; metrics: string[] }) => {
     const res = await fetch('/api/stalls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -58,7 +59,7 @@ export default function StallsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this stall?')) return;
+    if (!confirm('Are you sure you want to delete this stall? Any visit records will also be removed.')) return;
     try {
       const res = await fetch(`/api/stalls/${id}`, { method: 'DELETE' });
       if (!res.ok) {

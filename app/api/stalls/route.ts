@@ -5,8 +5,14 @@ import { z } from 'zod'
 
 const stallStatusEnum = z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE'])
 
+const metricsSchema = z
+  .array(z.string().min(1).max(50))
+  .max(20, 'Up to 20 metrics per stall')
+  .optional()
+
 const createSchema = z.object({
   name: z.string().min(1).max(200),
+  metrics: metricsSchema,
 })
 
 const updateSchema = z.object({
@@ -15,6 +21,7 @@ const updateSchema = z.object({
   icon: z.string().max(50).optional(),
   maxVolunteers: z.coerce.number().int().min(1).max(50).optional(),
   status: stallStatusEnum.optional(),
+  metrics: metricsSchema,
 })
 
 function generateCode(name: string): string {
@@ -51,6 +58,7 @@ export async function GET() {
       icon: s.icon,
       maxVolunteers: s.maxVolunteers,
       status: s.status,
+      metrics: s.metrics ?? [],
       eventCount: s._count.events,
       totalVisits: s._count.stallVisits,
       assignedVolunteers: s._count.assignments,
@@ -59,7 +67,7 @@ export async function GET() {
 
     return NextResponse.json({ stalls: result })
   } catch (error) {
-    console.error('Fetch stalls error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('Fetch stalls error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -95,12 +103,27 @@ export async function POST(request: NextRequest) {
         icon: 'Star',
         maxVolunteers: 5,
         status: 'ACTIVE',
+        metrics: result.data.metrics ? sanitizeMetrics(result.data.metrics) : [],
       },
     })
 
     return NextResponse.json({ stall }, { status: 201 })
   } catch (error) {
-    console.error('Create stall error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('Create stall error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+
+function sanitizeMetrics(metrics: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of metrics) {
+    const cleaned = raw.trim()
+    if (!cleaned) continue
+    const key = cleaned.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(cleaned)
+  }
+  return out
 }

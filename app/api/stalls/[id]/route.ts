@@ -3,13 +3,33 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { z } from 'zod'
 
+const metricsSchema = z
+  .array(z.string().min(1).max(50))
+  .max(20, 'Up to 20 metrics per stall')
+  .optional()
+
 const updateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional().or(z.literal('')),
   icon: z.string().max(50).optional(),
   maxVolunteers: z.coerce.number().int().min(1).max(50).optional(),
   status: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']).optional(),
+  metrics: metricsSchema,
 })
+
+function sanitizeMetrics(metrics: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of metrics) {
+    const cleaned = raw.trim()
+    if (!cleaned) continue
+    const key = cleaned.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(cleaned)
+  }
+  return out
+}
 
 export async function PUT(
   request: NextRequest,
@@ -30,6 +50,9 @@ export async function PUT(
 
     const data: any = { ...result.data }
     if (data.description === '') data.description = null
+    if (Array.isArray(data.metrics)) {
+      data.metrics = sanitizeMetrics(data.metrics)
+    }
 
     const stall = await prisma.stall.update({
       where: { id },
@@ -38,7 +61,7 @@ export async function PUT(
 
     return NextResponse.json({ stall })
   } catch (error) {
-    console.error('Update stall error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('Update stall error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -55,16 +78,21 @@ export async function DELETE(
 
     const { id } = await params
 
-    const visitCount = await prisma.stallVisit.count({ where: { stallId: id } })
-    if (visitCount > 0) {
-      return NextResponse.json({ error: 'Cannot delete stall with visit records' }, { status: 400 })
+    const eventCount = await prisma.event.count({
+      where: { stalls: { some: { id } } },
+    })
+    if (eventCount > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete stall while it is assigned to ${eventCount} event${eventCount === 1 ? '' : 's'}. Remove it from the event first.` },
+        { status: 409 }
+      )
     }
 
     await prisma.stall.delete({ where: { id } })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Delete stall error:', error instanceof Error ? error.message : 'Unknown')
+    console.error('Delete stall error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
