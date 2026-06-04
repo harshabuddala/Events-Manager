@@ -27,9 +27,9 @@ export default function ScanClientPage({
   const isEmbed = searchParams.get('embed') === 'true'
   const [registration, setRegistration] = useState(initialRegistration)
   const isGrader = session && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR', 'ADMIN', 'MANAGER'].includes(session.role)
-  
+
   const [activeTab, setActiveTab] = useState<'report' | 'grade'>(
-    isGrader ? 'grade' : 'report'
+    isGrader && assignments.length > 0 ? 'grade' : 'report'
   )
 
   // Allowed stalls computation
