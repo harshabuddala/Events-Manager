@@ -362,6 +362,7 @@ async function main() {
         icon: 'Calculator',
         maxVolunteers: 5,
         status: 'ACTIVE',
+        metrics: ['Problem Solving', 'Calculation', 'Logical Thinking', 'Speed'],
       },
     }),
     prisma.stall.create({
@@ -373,6 +374,7 @@ async function main() {
         icon: 'Activity',
         maxVolunteers: 5,
         status: 'ACTIVE',
+        metrics: ['Curiosity', 'Observation', 'Hypothesis', 'Execution'],
       },
     }),
     prisma.stall.create({
@@ -384,6 +386,7 @@ async function main() {
         icon: 'BookOpen',
         maxVolunteers: 5,
         status: 'ACTIVE',
+        metrics: ['Vocabulary', 'Comprehension', 'Communication', 'Confidence'],
       },
     }),
     prisma.stall.create({
@@ -395,6 +398,7 @@ async function main() {
         icon: 'BrainCircuit',
         maxVolunteers: 5,
         status: 'ACTIVE',
+        metrics: ['Reasoning', 'Pattern Recognition', 'Strategy', 'Focus'],
       },
     }),
     prisma.stall.create({

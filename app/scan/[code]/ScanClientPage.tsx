@@ -147,7 +147,7 @@ export default function ScanClientPage({
             (r: any) => r.registrationCode === registration.registrationCode
           )
           if (updatedReg) {
-            setRegistration({ ...updatedReg, event: registration.event })
+            setRegistration(updatedReg)
           }
         }
       }
@@ -324,26 +324,18 @@ export default function ScanClientPage({
                     </div>
                   )}
 
-                  {/* Select Stall */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs sm:text-sm font-bold text-slate-700">Choose Stall <span className="text-rose-500">*</span></label>
-                    <select
-                      value={stallId}
-                      onChange={e => { setStallId(e.target.value); setError(''); setSuccess(''); }}
-                      className="w-full px-3.5 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800 font-semibold"
-                    >
-                      <option value="">Select Stall...</option>
-                      {allowedStalls.map((s: any) => {
-                        const visit = registration.stallVisits?.find((v: any) => v.stallId === s.id)
-                        const isGraded = visit && visit.performance
-                        return (
-                          <option key={s.id} value={s.id} disabled={!!isGraded}>
-                            {s.name} ({s.code}) {isGraded ? '✓ Graded' : ''}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
+                  {/* Assigned Stall (read-only — each volunteer is assigned to one stall) */}
+                  {selectedStall && (
+                    <div className="flex items-center justify-between gap-3 bg-violet-50 border border-violet-100 rounded-xl px-3.5 py-3">
+                      <div className="min-w-0">
+                        <span className="text-[9px] sm:text-[10px] font-bold text-violet-500 uppercase tracking-widest block">Assigned Stall</span>
+                        <span className="text-sm sm:text-base font-extrabold text-violet-900 truncate block">{selectedStall.name}</span>
+                      </div>
+                      <span className="text-[10px] sm:text-xs font-mono font-bold text-violet-700 bg-white border border-violet-200 px-2 py-1 rounded-lg shrink-0">
+                        {selectedStall.code}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Per-metric star ratings (only when the stall has metrics configured) */}
                   {selectedStallMetrics.length > 0 ? (

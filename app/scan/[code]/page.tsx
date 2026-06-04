@@ -21,7 +21,7 @@ export default async function ScanPage({ params }: PageProps) {
           community: true,
           stalls: {
             where: { status: 'ACTIVE' },
-            select: { id: true, code: true, name: true }
+            select: { id: true, code: true, name: true, metrics: true }
           }
         }
       },

@@ -44,8 +44,16 @@ export async function GET(
         },
         stallVisits: {
           include: {
-            stall: { select: { id: true, name: true } },
-            performance: { select: { score: true, grade: true, remarks: true } },
+            stall: { select: { id: true, name: true, metrics: true } },
+            performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
+          },
+        },
+        event: {
+          select: {
+            stalls: {
+              where: { status: 'ACTIVE' },
+              select: { id: true, code: true, name: true, metrics: true },
+            },
           },
         },
       },
