@@ -77,6 +77,14 @@ export async function DELETE(
     }
 
     const { id } = await params
+    if (!id) {
+      return NextResponse.json({ error: 'Stall id is required' }, { status: 400 })
+    }
+
+    const existing = await prisma.stall.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Stall not found' }, { status: 404 })
+    }
 
     const eventCount = await prisma.event.count({
       where: { stalls: { some: { id } } },

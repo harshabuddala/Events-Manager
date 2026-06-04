@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import StallFormModal from '@/app/components/StallFormModal';
-import { 
-  Plus, MoreVertical, Star, Trash2, Loader2
+import StallFormModal, { StallFormPayload } from '@/app/components/StallFormModal';
+import {
+  Plus, MoreVertical, Star, Trash2, Pencil
 } from 'lucide-react';
 
 interface Stall {
   id: string;
   code: string;
   name: string;
-  description?: string;
+  description?: string | null;
   icon?: string;
   maxVolunteers: number;
   status: string;
@@ -23,6 +23,8 @@ interface Stall {
 
 export default function StallsPage() {
   const [stalls, setStalls] = useState<Stall[]>([]);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [editingStall, setEditingStall] = useState<Stall | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [menuState, setMenuState] = useState<{id: string; top: number; left: number} | null>(null);
@@ -45,17 +47,62 @@ export default function StallsPage() {
     fetchStalls();
   }, [fetchStalls]);
 
-  const handleCreate = async (data: { name: string; metrics: string[] }) => {
+  const openCreate = () => {
+    setModalMode('create');
+    setEditingStall(null);
+    setIsModalOpen(true);
+  };
+
+  const openEdit = (stall: Stall) => {
+    setModalMode('edit');
+    setEditingStall(stall);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingStall(null);
+  };
+
+  const handleCreate = async (data: StallFormPayload) => {
     const res = await fetch('/api/stalls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ name: data.name, metrics: data.metrics }),
     });
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Failed to create stall');
     }
     fetchStalls();
+  };
+
+  const handleUpdate = async (data: StallFormPayload) => {
+    if (!editingStall) return;
+    const res = await fetch(`/api/stalls/${editingStall.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description ?? '',
+        maxVolunteers: data.maxVolunteers,
+        status: data.status,
+        metrics: data.metrics,
+      }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to update stall');
+    }
+    fetchStalls();
+  };
+
+  const handleSubmit = async (data: StallFormPayload) => {
+    if (modalMode === 'edit') {
+      await handleUpdate(data);
+    } else {
+      await handleCreate(data);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -83,12 +130,12 @@ export default function StallsPage() {
   };
 
   return (
-    <DashboardLayout 
+    <DashboardLayout
       title="Activity Stalls"
       subtitle="Manage educational activity stalls and view performance metrics."
       headerAction={
-        <button 
-          onClick={() => setIsModalOpen(true)}
+        <button
+          onClick={openCreate}
           className="hidden lg:flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -107,6 +154,16 @@ export default function StallsPage() {
           className="fixed z-30 w-36 bg-white border border-slate-200 rounded-lg shadow-xl py-1"
           style={{ top: menuState.top, left: menuState.left }}
         >
+          <button
+            onClick={() => {
+              const stall = stalls.find(s => s.id === menuState.id)
+              setMenuState(null)
+              if (stall) openEdit(stall)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <Pencil className="w-3.5 h-3.5" /> Edit
+          </button>
           <button
             onClick={() => { handleDelete(menuState.id); setMenuState(null); }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50"
@@ -186,7 +243,22 @@ export default function StallsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4">
+              {stall.metrics && stall.metrics.length > 0 && (
+                <div className="pt-3 pb-1">
+                  <div className="flex flex-wrap gap-1">
+                    {stall.metrics.slice(0, 3).map((m, idx) => (
+                      <span key={`${m}-${idx}`} className="inline-flex items-center text-[10px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 px-1.5 py-0.5 rounded">
+                        {m}
+                      </span>
+                    ))}
+                    {stall.metrics.length > 3 && (
+                      <span className="text-[10px] font-semibold text-slate-500">+{stall.metrics.length - 3}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-3">
                 {getStatusBadge(stall.status)}
                 <span className="text-[10px] font-medium text-slate-400">{stall.code}</span>
               </div>
@@ -194,7 +266,7 @@ export default function StallsPage() {
           ))}
 
           {/* Add New Stall Card */}
-          <div onClick={() => setIsModalOpen(true)} className="bg-slate-50/50 rounded-xl border-2 border-dashed border-slate-200/80 hover:border-violet-300 hover:bg-slate-50 transition-all duration-300 p-5 flex flex-col items-center justify-center min-h-[220px] cursor-pointer group">
+          <div onClick={openCreate} className="bg-slate-50/50 rounded-xl border-2 border-dashed border-slate-200/80 hover:border-violet-300 hover:bg-slate-50 transition-all duration-300 p-5 flex flex-col items-center justify-center min-h-[220px] cursor-pointer group">
             <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm group-hover:shadow-md group-hover:border-violet-200">
               <Plus className="w-6 h-6 text-slate-400 group-hover:text-violet-600" />
             </div>
@@ -206,8 +278,20 @@ export default function StallsPage() {
 
       <StallFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleCreate}
+        mode={modalMode}
+        initialData={
+          modalMode === 'edit' && editingStall
+            ? {
+                name: editingStall.name,
+                description: editingStall.description ?? '',
+                maxVolunteers: editingStall.maxVolunteers,
+                status: editingStall.status as 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE',
+                metrics: editingStall.metrics ?? [],
+              }
+            : undefined
+        }
+        onClose={closeModal}
+        onSubmit={handleSubmit}
       />
     </DashboardLayout>
   );
