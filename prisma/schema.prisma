@@ -262,7 +262,7 @@ model Performance {
   updatedAt       DateTime @updatedAt
 
   // Relations
-  stallVisit StallVisit @relation(fields: [stallVisitId], references: [id])
+  stallVisit StallVisit @relation(fields: [stallVisitId], references: [id], onDelete: Cascade)
   volunteer  Volunteer  @relation(fields: [volunteerId], references: [id])
 
   @@map("performances")
