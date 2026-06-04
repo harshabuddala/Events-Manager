@@ -27,19 +27,10 @@ export default function ScanClientPage({
   const isEmbed = searchParams.get('embed') === 'true'
   const [registration, setRegistration] = useState(initialRegistration)
   const isGrader = session && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR', 'ADMIN', 'MANAGER'].includes(session.role)
-  const isGuide = !!isGrader &&
-    !['ADMIN', 'MANAGER'].includes(session.role) &&
-    assignments.length === 0
-
+  
   const [activeTab, setActiveTab] = useState<'report' | 'grade'>(
-    isGuide || !isGrader ? 'report' : 'grade'
+    isGrader ? 'grade' : 'report'
   )
-
-  React.useEffect(() => {
-    if (isGuide && activeTab !== 'report') {
-      setActiveTab('report')
-    }
-  }, [isGuide, activeTab])
 
   // Allowed stalls computation
   const allowedStalls = assignments.length > 0 
@@ -215,14 +206,14 @@ export default function ScanClientPage({
       {/* Main Container */}
       <div className="max-w-xl mx-auto px-3 sm:px-4 mt-4 sm:mt-6">
         
-        {/* Dynamic Dual Tab Navigation (Visible only to Graders/Admins with stall assignments) */}
-        {isGrader && !isGuide && (
+        {/* Dynamic Dual Tab Navigation (Visible only to Graders/Admins) */}
+        {isGrader && (
           <div className="bg-white p-1 rounded-2xl border border-slate-200 shadow-sm flex mb-4 sm:mb-5 font-semibold print:hidden">
             <button
               onClick={() => setActiveTab('grade')}
               className={`flex-1 py-3 sm:py-2.5 text-xs sm:text-sm rounded-xl transition-all ${
-                activeTab === 'grade'
-                  ? 'bg-violet-600 text-white shadow-sm'
+                activeTab === 'grade' 
+                  ? 'bg-violet-600 text-white shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -232,8 +223,8 @@ export default function ScanClientPage({
             <button
               onClick={() => setActiveTab('report')}
               className={`flex-1 py-3 sm:py-2.5 text-xs sm:text-sm rounded-xl transition-all ${
-                activeTab === 'report'
-                  ? 'bg-violet-600 text-white shadow-sm'
+                activeTab === 'report' 
+                  ? 'bg-violet-600 text-white shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -243,23 +234,8 @@ export default function ScanClientPage({
           </div>
         )}
 
-        {/* Guide Mode banner: shown to non-admin graders with no stall assignments */}
-        {isGuide && (
-          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-3 sm:p-4 flex items-center gap-3 mb-4 sm:mb-5 print:hidden">
-            <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0 text-violet-600">
-              <UserCheck className="w-4 h-4" />
-            </div>
-            <div className="text-xs min-w-0">
-              <p className="font-extrabold text-violet-800 uppercase tracking-wider text-[10px] sm:text-[11px]">Guide Mode</p>
-              <p className="text-violet-700/90 font-medium leading-snug mt-0.5">
-                You aren&apos;t assigned to grade any stall. Help the student by reviewing their progress below.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* ==================== GRADER TERMINAL TAB ==================== */}
-        {activeTab === 'grade' && session && !isGuide && (
+        {activeTab === 'grade' && session && (
           <div className="space-y-4 sm:space-y-5 animate-fade-in">
             {/* Student Info Panel */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-sm">
