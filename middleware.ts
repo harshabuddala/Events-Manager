@@ -29,6 +29,8 @@ export async function middleware(request: NextRequest) {
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
+    "worker-src 'self' blob:",
+    "child-src 'self' blob:",
   ].join('; ')
   response.headers.set('Content-Security-Policy', csp)
 
