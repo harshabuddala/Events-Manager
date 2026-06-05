@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { 
   Award, BookOpen, Clock, CheckCircle2, AlertCircle, 
   Send, UserCheck, Star, Shield, ArrowLeft, LogIn,
-  ChevronDown, ScanLine, Printer, Download, Eye, IdCard
+  ChevronDown, ScanLine, Printer, Download, Eye, IdCard, Loader2
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -686,104 +686,139 @@ export default function ScanClientPage({
                        <Printer className="w-4 h-4" />
                        Print Card
                      </button>
+                                  {isMounted && bgImageBase64 ? (
+                        <BlobProvider document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}>
+                          {({ url, loading }) => (
+                            <button
+                              type="button"
+                              disabled={loading}
+                              onClick={() => {
+                                if (url) {
+                                  window.open(url, '_blank');
+                                }
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                            >
+                              <Eye className="w-4 h-4" />
+                              {loading ? 'Preparing...' : 'View Report'}
+                            </button>
+                          )}
+                        </BlobProvider>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 flex items-center justify-center gap-2 bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Preparing...
+                        </button>
+                      )}
 
-                     {isMounted && (
-                       <BlobProvider document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}>
-                         {({ url, loading }) => (
-                           <button
-                             type="button"
-                             disabled={loading}
-                             onClick={() => {
-                               if (url) {
-                                 window.open(url, '_blank');
-                               }
-                             }}
-                             className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                           >
-                             <Eye className="w-4 h-4" />
-                             {loading ? 'Preparing...' : 'View Report'}
-                           </button>
-                         )}
-                       </BlobProvider>
-                     )}
+                      {isMounted && bgImageBase64 ? (
+                        <PDFDownloadLink
+                          document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}
+                          fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
+                          style={{ flex: 1, textDecoration: 'none' }}
+                        >
+                          {({ loading }) => (
+                            <button
+                              type="button"
+                              disabled={loading}
+                              className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                            >
+                              <Download className="w-4 h-4" />
+                              {loading ? 'Generating...' : 'Download PDF'}
+                            </button>
+                          )}
+                        </PDFDownloadLink>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 flex items-center justify-center gap-2 bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Preparing...
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                     {isMounted && (
-                       <PDFDownloadLink
-                         document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}
-                         fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
-                         style={{ flex: 1, textDecoration: 'none' }}
-                       >
-                         {({ loading }) => (
-                           <button
-                             type="button"
-                             disabled={loading}
-                             className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                           >
-                             <Download className="w-4 h-4" />
-                             {loading ? 'Generating...' : 'Download PDF'}
-                           </button>
-                         )}
-                       </PDFDownloadLink>
-                     )}
-                   </div>
-                 </div>
+                  {/* Student ID Card Actions */}
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student ID Card (A6 Size)</p>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full">
+                      {isMounted && idBgImageBase64 && idCardQrCode ? (
+                        <BlobProvider 
+                          document={
+                            <IdCardPdf 
+                              registration={registration} 
+                              backgroundImage={idBgImageBase64} 
+                              qrCodeDataUrl={idCardQrCode} 
+                            />
+                          }
+                        >
+                          {({ url, loading }) => (
+                            <button
+                              type="button"
+                              disabled={loading}
+                              onClick={() => {
+                                if (url) {
+                                  window.open(url, '_blank');
+                                }
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                            >
+                              <IdCard className="w-4 h-4" />
+                              {loading ? 'Preparing ID...' : 'View ID Card'}
+                            </button>
+                          )}
+                        </BlobProvider>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 flex items-center justify-center gap-2 bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Preparing...
+                        </button>
+                      )}
 
-                 {/* Student ID Card Actions */}
-                 <div className="space-y-1.5 pt-1">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student ID Card (A6 Size)</p>
-                   <div className="flex flex-col sm:flex-row gap-3 w-full">
-                     {isMounted && (
-                       <BlobProvider 
-                         document={
-                           <IdCardPdf 
-                             registration={registration} 
-                             backgroundImage={idBgImageBase64} 
-                             qrCodeDataUrl={idCardQrCode} 
-                           />
-                         }
-                       >
-                         {({ url, loading }) => (
-                           <button
-                             type="button"
-                             disabled={loading}
-                             onClick={() => {
-                               if (url) {
-                                 window.open(url, '_blank');
-                               }
-                             }}
-                             className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                           >
-                             <IdCard className="w-4 h-4" />
-                             {loading ? 'Preparing ID...' : 'View ID Card'}
-                           </button>
-                         )}
-                       </BlobProvider>
-                     )}
-
-                     {isMounted && (
-                       <PDFDownloadLink
-                         document={
-                           <IdCardPdf 
-                             registration={registration} 
-                             backgroundImage={idBgImageBase64} 
-                             qrCodeDataUrl={idCardQrCode} 
-                           />
-                         }
-                         fileName={`IDCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
-                         style={{ flex: 1, textDecoration: 'none' }}
-                       >
-                         {({ loading }) => (
-                           <button
-                             type="button"
-                             disabled={loading}
-                             className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                           >
-                             <Download className="w-4 h-4" />
-                             {loading ? 'Generating ID...' : 'Download ID Card'}
-                           </button>
-                         )}
-                       </PDFDownloadLink>
-                     )}
+                      {isMounted && idBgImageBase64 && idCardQrCode ? (
+                        <PDFDownloadLink
+                          document={
+                            <IdCardPdf 
+                              registration={registration} 
+                              backgroundImage={idBgImageBase64} 
+                              qrCodeDataUrl={idCardQrCode} 
+                            />
+                          }
+                          fileName={`IDCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
+                          style={{ flex: 1, textDecoration: 'none' }}
+                        >
+                          {({ loading }) => (
+                            <button
+                              type="button"
+                              disabled={loading}
+                              className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                            >
+                              <Download className="w-4 h-4" />
+                              {loading ? 'Generating ID...' : 'Download ID Card'}
+                            </button>
+                          )}
+                        </PDFDownloadLink>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 flex items-center justify-center gap-2 bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Preparing...
+                        </button>
+                      )}
                    </div>
                  </div>
 

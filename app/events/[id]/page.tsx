@@ -11,7 +11,7 @@ import {
   Calendar, Users, ArrowLeft, Plus, X, Link2, UserPlus,
   CheckCircle2, Clock, AlertCircle, ShoppingBag, UserCheck,
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
-  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard
+  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
@@ -1161,8 +1161,49 @@ export default function EventDetailPage() {
                           >
                             <QrCode className="w-4 h-4" />
                           </button>
-                          {isMounted && (
-                             <BlobProvider
+                          {isMounted && bgImageBase64 ? (
+                              <BlobProvider
+                                document={
+                                  <ReportCardPdf 
+                                    registration={{
+                                      ...reg,
+                                      event: {
+                                        ...event,
+                                        stalls: reg.event?.stalls || event?.stalls || []
+                                      }
+                                    }} 
+                                    backgroundImage={bgImageBase64}
+                                  />
+                                }
+                              >
+                                {({ url, loading }) => (
+                                  <button
+                                    type="button"
+                                    disabled={loading}
+                                    onClick={() => {
+                                      if (url) {
+                                        window.open(url, '_blank');
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                                    title={loading ? 'Preparing PDF...' : 'View Report Card'}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </BlobProvider>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"
+                                title="Preparing Report..."
+                              >
+                                <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                              </button>
+                            )}
+                            {isMounted && bgImageBase64 ? (
+                             <PDFDownloadLink
                                document={
                                  <ReportCardPdf 
                                    registration={{
@@ -1175,55 +1216,74 @@ export default function EventDetailPage() {
                                    backgroundImage={bgImageBase64}
                                  />
                                }
+                               fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
                              >
-                               {({ url, loading }) => (
+                               {({ loading }) => (
                                  <button
                                    type="button"
                                    disabled={loading}
-                                   onClick={() => {
-                                     if (url) {
-                                       window.open(url, '_blank');
-                                     }
-                                   }}
-                                   className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                                   title={loading ? 'Preparing PDF...' : 'View Report Card'}
+                                   className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
+                                   title={loading ? 'Generating PDF...' : 'Print Report Card'}
                                  >
-                                   <Eye className="w-4 h-4" />
+                                   <Printer className="w-4 h-4" />
                                  </button>
                                )}
-                             </BlobProvider>
+                             </PDFDownloadLink>
+                           ) : (
+                             <button
+                               type="button"
+                               disabled
+                               className="p-1.5 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"
+                               title="Preparing Report..."
+                             >
+                               <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                             </button>
                            )}
-                           {isMounted && (
-                            <PDFDownloadLink
-                              document={
-                                <ReportCardPdf 
-                                  registration={{
-                                    ...reg,
-                                    event: {
-                                      ...event,
-                                      stalls: reg.event?.stalls || event?.stalls || []
-                                    }
-                                  }} 
-                                  backgroundImage={bgImageBase64}
-                                />
-                              }
-                              fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
-                            >
-                              {({ loading }) => (
-                                <button
-                                  type="button"
-                                  disabled={loading}
-                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
-                                  title={loading ? 'Generating PDF...' : 'Print Report Card'}
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                              )}
-                            </PDFDownloadLink>
-                          )}
-                          <span className="w-px h-4 bg-slate-200 mx-1" />
-                          {isMounted && (
-                             <BlobProvider
+                           <span className="w-px h-4 bg-slate-200 mx-1" />
+                           {isMounted && idBgImageBase64 && idCardQrCodes[reg.registrationCode] ? (
+                              <BlobProvider
+                                document={
+                                  <IdCardPdf 
+                                    registration={{
+                                      ...reg,
+                                      event: {
+                                        ...event,
+                                        stalls: reg.event?.stalls || event?.stalls || []
+                                      }
+                                    }} 
+                                    backgroundImage={idBgImageBase64}
+                                    qrCodeDataUrl={idCardQrCodes[reg.registrationCode]}
+                                  />
+                                }
+                              >
+                                {({ url, loading }) => (
+                                  <button
+                                    type="button"
+                                    disabled={loading}
+                                    onClick={() => {
+                                      if (url) {
+                                        window.open(url, '_blank');
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                                    title={loading ? 'Preparing ID...' : 'View ID Card'}
+                                  >
+                                    <IdCard className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </BlobProvider>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"
+                                title="Preparing ID card..."
+                              >
+                                <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                              </button>
+                            )}
+                            {isMounted && idBgImageBase64 && idCardQrCodes[reg.registrationCode] ? (
+                             <PDFDownloadLink
                                document={
                                  <IdCardPdf 
                                    registration={{
@@ -1237,53 +1297,29 @@ export default function EventDetailPage() {
                                    qrCodeDataUrl={idCardQrCodes[reg.registrationCode]}
                                  />
                                }
+                               fileName={`IDCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
                              >
-                               {({ url, loading }) => (
+                               {({ loading }) => (
                                  <button
                                    type="button"
                                    disabled={loading}
-                                   onClick={() => {
-                                     if (url) {
-                                       window.open(url, '_blank');
-                                     }
-                                   }}
-                                   className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
-                                   title={loading ? 'Preparing ID...' : 'View ID Card'}
+                                   className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-orange-600 hover:border-orange-300 hover:bg-orange-50 transition-colors"
+                                   title={loading ? 'Generating ID...' : 'Print ID Card'}
                                  >
-                                   <IdCard className="w-4 h-4" />
+                                   <Printer className="w-4 h-4" />
                                  </button>
                                )}
-                             </BlobProvider>
+                             </PDFDownloadLink>
+                           ) : (
+                             <button
+                               type="button"
+                               disabled
+                               className="p-1.5 rounded-lg border border-slate-200 text-slate-300 cursor-not-allowed"
+                               title="Preparing ID card..."
+                             >
+                               <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                             </button>
                            )}
-                           {isMounted && (
-                            <PDFDownloadLink
-                              document={
-                                <IdCardPdf 
-                                  registration={{
-                                    ...reg,
-                                    event: {
-                                      ...event,
-                                      stalls: reg.event?.stalls || event?.stalls || []
-                                    }
-                                  }} 
-                                  backgroundImage={idBgImageBase64}
-                                  qrCodeDataUrl={idCardQrCodes[reg.registrationCode]}
-                                />
-                              }
-                              fileName={`IDCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
-                            >
-                              {({ loading }) => (
-                                <button
-                                  type="button"
-                                  disabled={loading}
-                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-orange-600 hover:border-orange-300 hover:bg-orange-50 transition-colors"
-                                  title={loading ? 'Generating ID...' : 'Print ID Card'}
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                              )}
-                            </PDFDownloadLink>
-                          )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors[reg.status] || ''}`}>
                             {reg.status.replace('_', ' ')}
                           </span>

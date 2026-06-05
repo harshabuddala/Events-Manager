@@ -330,7 +330,7 @@ export default function RegistrationsPage() {
                         >
                           <QrCode className="w-4 h-4" />
                         </button>
-                        {isMounted && (
+                        {isMounted && bgImageBase64 ? (
                           <BlobProvider document={<ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />}>
                             {({ url, loading }) => (
                               <button
@@ -348,8 +348,17 @@ export default function RegistrationsPage() {
                               </button>
                             )}
                           </BlobProvider>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
+                            title="Preparing Report..."
+                          >
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                          </button>
                         )}
-                        {isMounted && (
+                        {isMounted && bgImageBase64 ? (
                           <PDFDownloadLink
                             document={<ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />}
                             fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
@@ -365,9 +374,18 @@ export default function RegistrationsPage() {
                               </button>
                             )}
                           </PDFDownloadLink>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
+                            title="Preparing Report..."
+                          >
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                          </button>
                         )}
                         <span className="w-px h-4 bg-slate-200 mx-1" />
-                        {isMounted && (
+                        {isMounted && idBgImageBase64 && idCardQrCodes[reg.registrationCode] ? (
                           <BlobProvider 
                             document={
                               <IdCardPdf 
@@ -393,8 +411,17 @@ export default function RegistrationsPage() {
                               </button>
                             )}
                           </BlobProvider>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
+                            title="Preparing ID card..."
+                          >
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                          </button>
                         )}
-                        {isMounted && (
+                        {isMounted && idBgImageBase64 && idCardQrCodes[reg.registrationCode] ? (
                           <PDFDownloadLink
                             document={
                               <IdCardPdf 
@@ -416,6 +443,15 @@ export default function RegistrationsPage() {
                               </button>
                             )}
                           </PDFDownloadLink>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
+                            title="Preparing ID card..."
+                          >
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                          </button>
                         )}
                         <button 
                           onClick={() => router.push(`/events/${reg.event.id}`)}
