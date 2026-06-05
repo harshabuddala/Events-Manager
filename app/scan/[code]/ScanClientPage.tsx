@@ -12,15 +12,7 @@ import dynamic from 'next/dynamic'
 import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf'
 import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf'
 
-const PDFDownloadLink = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
-  { ssr: false }
-)
-
-const BlobProvider = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => mod.BlobProvider),
-  { ssr: false }
-)
+// We will load @react-pdf/renderer dynamically inside our dynamic PDF generation handlers to prevent SSR issues.
 
 interface ScanClientPageProps {
   initialRegistration: any
@@ -71,6 +63,118 @@ export default function ScanClientPage({
       }).catch(console.error);
     }).catch(console.error);
   }, [registration]);
+  const [generatingDoc, setGeneratingDoc] = useState<'report-view' | 'report-print' | 'id-view' | 'id-print' | null>(null);
+
+  const handleViewReportCard = async () => {
+    if (!registration) return;
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write('Loading Report Card PDF... Please wait.');
+    }
+    try {
+      setGeneratingDoc('report-view');
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = <ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />;
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      if (newWindow) {
+        newWindow.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error("Failed to generate report card PDF:", error);
+      if (newWindow) newWindow.close();
+      alert("Failed to generate report card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
+  const handleDownloadReportCard = async () => {
+    if (!registration) return;
+    try {
+      setGeneratingDoc('report-print');
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = <ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />;
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download report card PDF:", error);
+      alert("Failed to download report card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
+  const handleViewIdCard = async () => {
+    if (!registration) return;
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write('Loading ID Card PDF... Please wait.');
+    }
+    try {
+      setGeneratingDoc('id-view');
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = (
+        <IdCardPdf 
+          registration={registration} 
+          backgroundImage={idBgImageBase64} 
+          qrCodeDataUrl={idCardQrCode} 
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      if (newWindow) {
+        newWindow.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error("Failed to generate ID card PDF:", error);
+      if (newWindow) newWindow.close();
+      alert("Failed to generate ID card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
+  const handleDownloadIdCard = async () => {
+    if (!registration) return;
+    try {
+      setGeneratingDoc('id-print');
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = (
+        <IdCardPdf 
+          registration={registration} 
+          backgroundImage={idBgImageBase64} 
+          qrCodeDataUrl={idCardQrCode} 
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `IDCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download ID card PDF:", error);
+      alert("Failed to download ID card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
   const isGrader = session && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR', 'ADMIN', 'MANAGER'].includes(session.role)
 
   const [activeTab, setActiveTab] = useState<'report' | 'grade'>(
@@ -680,68 +784,40 @@ export default function ScanClientPage({
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student Report Card</p>
                    <div className="flex flex-col sm:flex-row gap-3 w-full">
                      <button
-                       onClick={() => window.print()}
-                       className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                     >
-                       <Printer className="w-4 h-4" />
-                       Print Card
-                     </button>
-                                  {isMounted && bgImageBase64 ? (
-                        <BlobProvider document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}>
-                          {({ url, loading }) => (
-                            <button
-                              type="button"
-                              disabled={loading}
-                              onClick={() => {
-                                if (url) {
-                                  window.open(url, '_blank');
-                                }
-                              }}
-                              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                            >
-                              <Eye className="w-4 h-4" />
-                              {loading ? 'Preparing...' : 'View Report'}
-                            </button>
-                          )}
-                        </BlobProvider>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="flex-1 flex items-center justify-center gap-2 bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
-                        >
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Preparing...
-                        </button>
-                      )}
+                        onClick={() => window.print()}
+                        className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Print Card
+                      </button>
 
-                      {isMounted && bgImageBase64 ? (
-                        <PDFDownloadLink
-                          document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}
-                          fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
-                          style={{ flex: 1, textDecoration: 'none' }}
-                        >
-                          {({ loading }) => (
-                            <button
-                              type="button"
-                              disabled={loading}
-                              className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                            >
-                              <Download className="w-4 h-4" />
-                              {loading ? 'Generating...' : 'Download PDF'}
-                            </button>
-                          )}
-                        </PDFDownloadLink>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="flex-1 flex items-center justify-center gap-2 bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
-                        >
+                      <button
+                        type="button"
+                        disabled={generatingDoc !== null}
+                        onClick={handleViewReportCard}
+                        className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                      >
+                        {generatingDoc === 'report-view' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Preparing...
-                        </button>
-                      )}
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                        {generatingDoc === 'report-view' ? 'Preparing...' : 'View Report'}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={generatingDoc !== null}
+                        onClick={handleDownloadReportCard}
+                        className="flex-1 flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                      >
+                        {generatingDoc === 'report-print' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                        {generatingDoc === 'report-print' ? 'Generating...' : 'Download PDF'}
+                      </button>
                     </div>
                   </div>
 
@@ -749,76 +825,35 @@ export default function ScanClientPage({
                   <div className="space-y-1.5 pt-1">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student ID Card (A6 Size)</p>
                     <div className="flex flex-col sm:flex-row gap-3 w-full">
-                      {isMounted && idBgImageBase64 && idCardQrCode ? (
-                        <BlobProvider 
-                          document={
-                            <IdCardPdf 
-                              registration={registration} 
-                              backgroundImage={idBgImageBase64} 
-                              qrCodeDataUrl={idCardQrCode} 
-                            />
-                          }
-                        >
-                          {({ url, loading }) => (
-                            <button
-                              type="button"
-                              disabled={loading}
-                              onClick={() => {
-                                if (url) {
-                                  window.open(url, '_blank');
-                                }
-                              }}
-                              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                            >
-                              <IdCard className="w-4 h-4" />
-                              {loading ? 'Preparing ID...' : 'View ID Card'}
-                            </button>
-                          )}
-                        </BlobProvider>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="flex-1 flex items-center justify-center gap-2 bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
-                        >
+                      <button
+                        type="button"
+                        disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCode}
+                        onClick={handleViewIdCard}
+                        className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                        title={!idBgImageBase64 || !idCardQrCode ? "Preparing ID card assets..." : "View ID Card"}
+                      >
+                        {generatingDoc === 'id-view' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Preparing...
-                        </button>
-                      )}
+                        ) : (
+                          <IdCard className="w-4 h-4" />
+                        )}
+                        {generatingDoc === 'id-view' ? 'Preparing ID...' : 'View ID Card'}
+                      </button>
 
-                      {isMounted && idBgImageBase64 && idCardQrCode ? (
-                        <PDFDownloadLink
-                          document={
-                            <IdCardPdf 
-                              registration={registration} 
-                              backgroundImage={idBgImageBase64} 
-                              qrCodeDataUrl={idCardQrCode} 
-                            />
-                          }
-                          fileName={`IDCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
-                          style={{ flex: 1, textDecoration: 'none' }}
-                        >
-                          {({ loading }) => (
-                            <button
-                              type="button"
-                              disabled={loading}
-                              className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                            >
-                              <Download className="w-4 h-4" />
-                              {loading ? 'Generating ID...' : 'Download ID Card'}
-                            </button>
-                          )}
-                        </PDFDownloadLink>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          className="flex-1 flex items-center justify-center gap-2 bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed"
-                        >
+                      <button
+                        type="button"
+                        disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCode}
+                        onClick={handleDownloadIdCard}
+                        className="flex-1 flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                        title={!idBgImageBase64 || !idCardQrCode ? "Preparing ID card assets..." : "Download ID Card"}
+                      >
+                        {generatingDoc === 'id-print' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Preparing...
-                        </button>
-                      )}
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                        {generatingDoc === 'id-print' ? 'Generating ID...' : 'Download ID Card'}
+                      </button>
                    </div>
                  </div>
 

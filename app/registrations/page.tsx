@@ -7,19 +7,9 @@ import {
   Users, Search, Filter, Trash2, ArrowRight, Printer, 
   CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye, IdCard
 } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
 import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf';
-
-const PDFDownloadLink = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
-  { ssr: false }
-);
-
-const BlobProvider = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => mod.BlobProvider),
-  { ssr: false }
-);
+// We will load @react-pdf/renderer dynamically inside our dynamic PDF generation handlers to prevent SSR issues.
 
 interface Registration {
   id: string;
@@ -142,6 +132,114 @@ export default function RegistrationsPage() {
   useEffect(() => {
     fetchRegistrations();
   }, [fetchRegistrations]);
+
+  const [generatingDoc, setGeneratingDoc] = useState<{ id: string; type: 'report-view' | 'report-print' | 'id-view' | 'id-print' } | null>(null);
+
+  const handleViewReportCard = async (reg: Registration) => {
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write('Loading Report Card PDF... Please wait.');
+    }
+    try {
+      setGeneratingDoc({ id: reg.id, type: 'report-view' });
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = <ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />;
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      if (newWindow) {
+        newWindow.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error("Failed to generate report card PDF:", error);
+      if (newWindow) newWindow.close();
+      alert("Failed to generate report card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
+  const handleDownloadReportCard = async (reg: Registration) => {
+    try {
+      setGeneratingDoc({ id: reg.id, type: 'report-print' });
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = <ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />;
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download report card PDF:", error);
+      alert("Failed to download report card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
+  const handleViewIdCard = async (reg: Registration) => {
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write('Loading ID Card PDF... Please wait.');
+    }
+    try {
+      setGeneratingDoc({ id: reg.id, type: 'id-view' });
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = (
+        <IdCardPdf 
+          registration={reg} 
+          backgroundImage={idBgImageBase64} 
+          qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      if (newWindow) {
+        newWindow.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error("Failed to generate ID card PDF:", error);
+      if (newWindow) newWindow.close();
+      alert("Failed to generate ID card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
+
+  const handleDownloadIdCard = async (reg: Registration) => {
+    try {
+      setGeneratingDoc({ id: reg.id, type: 'id-print' });
+      const { pdf } = await import('@react-pdf/renderer');
+      const doc = (
+        <IdCardPdf 
+          registration={reg} 
+          backgroundImage={idBgImageBase64} 
+          qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `IDCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download ID card PDF:", error);
+      alert("Failed to download ID card PDF. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this registration? This will remove all stall visits and scores.')) return;
@@ -330,129 +428,59 @@ export default function RegistrationsPage() {
                         >
                           <QrCode className="w-4 h-4" />
                         </button>
-                        {isMounted && bgImageBase64 ? (
-                          <BlobProvider document={<ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />}>
-                            {({ url, loading }) => (
-                              <button
-                                type="button"
-                                disabled={loading}
-                                onClick={() => {
-                                  if (url) {
-                                    window.open(url, '_blank');
-                                  }
-                                }}
-                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                                title={loading ? 'Preparing PDF...' : 'View Report'}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            )}
-                          </BlobProvider>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
-                            title="Preparing Report..."
-                          >
-                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
-                          </button>
-                        )}
-                        {isMounted && bgImageBase64 ? (
-                          <PDFDownloadLink
-                            document={<ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />}
-                            fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
-                          >
-                            {({ loading }) => (
-                              <button
-                                type="button"
-                                disabled={loading}
-                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                                title={loading ? 'Generating PDF...' : 'Print Report Card'}
-                              >
-                                <Printer className="w-4 h-4" />
-                              </button>
-                            )}
-                          </PDFDownloadLink>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
-                            title="Preparing Report..."
-                          >
-                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          disabled={generatingDoc !== null}
+                          onClick={() => handleViewReportCard(reg)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                          title="View Report Card"
+                        >
+                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'report-view' ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={generatingDoc !== null}
+                          onClick={() => handleDownloadReportCard(reg)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors disabled:opacity-50"
+                          title="Print Report Card"
+                        >
+                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'report-print' ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                          ) : (
+                            <Printer className="w-4 h-4" />
+                          )}
+                        </button>
                         <span className="w-px h-4 bg-slate-200 mx-1" />
-                        {isMounted && idBgImageBase64 && idCardQrCodes[reg.registrationCode] ? (
-                          <BlobProvider 
-                            document={
-                              <IdCardPdf 
-                                registration={reg} 
-                                backgroundImage={idBgImageBase64} 
-                                qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
-                              />
-                            }
-                          >
-                            {({ url, loading }) => (
-                              <button
-                                type="button"
-                                disabled={loading}
-                                onClick={() => {
-                                  if (url) {
-                                    window.open(url, '_blank');
-                                  }
-                                }}
-                                className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors"
-                                title={loading ? 'Preparing ID...' : 'View ID Card'}
-                              >
-                                <IdCard className="w-4 h-4" />
-                              </button>
-                            )}
-                          </BlobProvider>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
-                            title="Preparing ID card..."
-                          >
-                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
-                          </button>
-                        )}
-                        {isMounted && idBgImageBase64 && idCardQrCodes[reg.registrationCode] ? (
-                          <PDFDownloadLink
-                            document={
-                              <IdCardPdf 
-                                registration={reg} 
-                                backgroundImage={idBgImageBase64} 
-                                qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
-                              />
-                            }
-                            fileName={`IDCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
-                          >
-                            {({ loading }) => (
-                              <button
-                                type="button"
-                                disabled={loading}
-                                className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors"
-                                title={loading ? 'Generating ID...' : 'Print ID Card'}
-                              >
-                                <Printer className="w-4 h-4" />
-                              </button>
-                            )}
-                          </PDFDownloadLink>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="p-1.5 text-slate-300 rounded-md cursor-not-allowed"
-                            title="Preparing ID card..."
-                          >
-                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCodes[reg.registrationCode]}
+                          onClick={() => handleViewIdCard(reg)}
+                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors disabled:opacity-50"
+                          title={!idBgImageBase64 || !idCardQrCodes[reg.registrationCode] ? "Preparing ID card assets..." : "View ID Card"}
+                        >
+                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'id-view' ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-violet-600" />
+                          ) : (
+                            <IdCard className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCodes[reg.registrationCode]}
+                          onClick={() => handleDownloadIdCard(reg)}
+                          className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors disabled:opacity-50"
+                          title={!idBgImageBase64 || !idCardQrCodes[reg.registrationCode] ? "Preparing ID card assets..." : "Print ID Card"}
+                        >
+                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'id-print' ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                          ) : (
+                            <Printer className="w-4 h-4" />
+                          )}
+                        </button>
                         <button 
                           onClick={() => router.push(`/events/${reg.event.id}`)}
                           className="flex items-center gap-1 bg-white border border-slate-200 hover:border-violet-300 hover:text-violet-700 text-slate-600 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm"
