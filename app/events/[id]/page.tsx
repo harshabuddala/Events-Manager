@@ -11,9 +11,20 @@ import {
   Calendar, Users, ArrowLeft, Plus, X, Link2, UserPlus,
   CheckCircle2, Clock, AlertCircle, ShoppingBag, UserCheck,
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
-  Star, Send, Award, Trash2, Printer, FileImage
+  Star, Send, Award, Trash2, Printer, FileImage, Eye
 } from 'lucide-react';
-import QRCode from 'qrcode';
+import dynamic from 'next/dynamic';
+import { ReportCardPdf } from '@/app/components/ReportCardPdf';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
+  { ssr: false }
+);
+
+const BlobProvider = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.BlobProvider),
+  { ssr: false }
+);
 
 interface EventDetail {
   id: string;
@@ -57,8 +68,10 @@ export default function EventDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics'>('registrations');
   const [userRole, setUserRole] = useState<string>('');
   const [isAssignedVolunteer, setIsAssignedVolunteer] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     fetch('/api/auth/me')
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -353,11 +366,16 @@ export default function EventDetailPage() {
     setQrCodeDataUrl('');
     
     const scanUrl = `${window.location.origin}/scan/${reg.registrationCode}`;
-    QRCode.toDataURL(scanUrl, { width: 300, margin: 2 }, (err, url) => {
-      if (err) console.error(err);
-      if (url) {
-        setQrCodeDataUrl(url);
-      }
+    import('qrcode').then((QRCodeLib) => {
+      const QRCode = QRCodeLib.default || QRCodeLib;
+      QRCode.toDataURL(scanUrl, { width: 300, margin: 2 }, (err: any, url: string) => {
+        if (err) console.error(err);
+        if (url) {
+          setQrCodeDataUrl(url);
+        }
+      });
+    }).catch((err) => {
+      console.error('Failed to load qrcode library dynamically', err);
     });
   };
 
@@ -1091,13 +1109,71 @@ export default function EventDetailPage() {
                               </button>
                             </>
                           )}
-                          <button
+                           <button
                             onClick={() => openQrModal(reg)}
                             title="Show Registration QR Code"
                             className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
                           >
                             <QrCode className="w-4 h-4" />
                           </button>
+                          {isMounted && (
+                             <BlobProvider
+                               document={
+                                 <ReportCardPdf 
+                                   registration={{
+                                     ...reg,
+                                     event: {
+                                       ...event,
+                                       stalls: reg.event?.stalls || event?.stalls || []
+                                     }
+                                   }} 
+                                 />
+                               }
+                             >
+                               {({ url, loading }) => (
+                                 <button
+                                   type="button"
+                                   disabled={loading}
+                                   onClick={() => {
+                                     if (url) {
+                                       window.open(url, '_blank');
+                                     }
+                                   }}
+                                   className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                                   title={loading ? 'Preparing PDF...' : 'View Report Card'}
+                                 >
+                                   <Eye className="w-4 h-4" />
+                                 </button>
+                               )}
+                             </BlobProvider>
+                           )}
+                           {isMounted && (
+                            <PDFDownloadLink
+                              document={
+                                <ReportCardPdf 
+                                  registration={{
+                                    ...reg,
+                                    event: {
+                                      ...event,
+                                      stalls: reg.event?.stalls || event?.stalls || []
+                                    }
+                                  }} 
+                                />
+                              }
+                              fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
+                            >
+                              {({ loading }) => (
+                                <button
+                                  type="button"
+                                  disabled={loading}
+                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
+                                  title={loading ? 'Generating PDF...' : 'Print Report Card'}
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                              )}
+                            </PDFDownloadLink>
+                          )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors[reg.status] || ''}`}>
                             {reg.status.replace('_', ' ')}
                           </span>

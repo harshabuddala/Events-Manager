@@ -48,12 +48,22 @@ export async function GET(request: NextRequest) {
           select: { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true }
         },
         event: {
-          select: { id: true, name: true, date: true, status: true, community: { select: { name: true } } }
+          select: {
+            id: true,
+            name: true,
+            date: true,
+            status: true,
+            community: { select: { name: true } },
+            stalls: {
+              where: { status: 'ACTIVE' },
+              select: { id: true, code: true, name: true, metrics: true }
+            }
+          }
         },
         stallVisits: {
           include: {
             stall: { select: { id: true, name: true } },
-            performance: { select: { id: true } },
+            performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
           },
         },
       },

@@ -1,13 +1,25 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   Award, BookOpen, Clock, CheckCircle2, AlertCircle, 
   Send, UserCheck, Star, Shield, ArrowLeft, LogIn,
-  ChevronDown, ScanLine, Printer, Download
+  ChevronDown, ScanLine, Printer, Download, Eye
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+import { ReportCardPdf } from '@/app/components/ReportCardPdf'
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
+  { ssr: false }
+)
+
+const BlobProvider = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.BlobProvider),
+  { ssr: false }
+)
 
 interface ScanClientPageProps {
   initialRegistration: any
@@ -26,6 +38,11 @@ export default function ScanClientPage({
   const searchParams = useSearchParams()
   const isEmbed = searchParams.get('embed') === 'true'
   const [registration, setRegistration] = useState(initialRegistration)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
   const isGrader = session && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR', 'ADMIN', 'MANAGER'].includes(session.role)
 
   const [activeTab, setActiveTab] = useState<'report' | 'grade'>(
@@ -630,14 +647,53 @@ export default function ScanClientPage({
 
             {/* Action Buttons (Print + PDF) */}
             {totalStalls > 0 && (
-              <div className="flex gap-3 print:hidden">
+              <div className="flex flex-col sm:flex-row gap-3 w-full print:hidden">
                 <button
                   onClick={() => window.print()}
-                  className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                  className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
                 >
                   <Printer className="w-4 h-4" />
-                  Print Report Card
+                  Print Card
                 </button>
+
+                {isMounted && (
+                  <BlobProvider document={<ReportCardPdf registration={registration} />}>
+                    {({ url, loading }) => (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => {
+                          if (url) {
+                            window.open(url, '_blank');
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                      >
+                        <Eye className="w-4 h-4" />
+                        {loading ? 'Preparing...' : 'View Report'}
+                      </button>
+                    )}
+                  </BlobProvider>
+                )}
+
+                {isMounted && (
+                  <PDFDownloadLink
+                    document={<ReportCardPdf registration={registration} />}
+                    fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
+                    style={{ flex: 1, textDecoration: 'none' }}
+                  >
+                    {({ loading }) => (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                      >
+                        <Download className="w-4 h-4" />
+                        {loading ? 'Generating...' : 'Download PDF'}
+                      </button>
+                    )}
+                  </PDFDownloadLink>
+                )}
               </div>
             )}
           </div>

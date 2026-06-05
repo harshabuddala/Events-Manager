@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, QrCode, RefreshCw, Clock, CheckCircle2, Smartphone, Copy, Check } from 'lucide-react';
-import QRCodeSVG from 'qrcode';
 
 interface QrLoginGeneratorProps {
   isOpen: boolean;
@@ -37,6 +36,8 @@ export default function QrLoginGenerator({ isOpen, onClose, targetUserId, target
 
       // Generate QR code data URL
       const loginUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/?token=${data.token}`;
+      const QRCodeLib = await import('qrcode');
+      const QRCodeSVG = QRCodeLib.default || QRCodeLib;
       const dataUrl = await QRCodeSVG.toDataURL(loginUrl, {
         width: 280,
         margin: 2,

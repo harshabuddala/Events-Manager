@@ -5,9 +5,20 @@ import DashboardLayout from '@/app/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { 
   Users, Search, Filter, Trash2, ArrowRight, Printer, 
-  CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X
+  CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye
 } from 'lucide-react';
-import QRCode from 'qrcode';
+import dynamic from 'next/dynamic';
+import { ReportCardPdf } from '@/app/components/ReportCardPdf';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
+  { ssr: false }
+);
+
+const BlobProvider = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.BlobProvider),
+  { ssr: false }
+);
 
 interface Registration {
   id: string;
@@ -51,6 +62,7 @@ export default function RegistrationsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [qrModal, setQrModal] = useState<{ code: string; dataUrl: string } | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Registration | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   const canManage = userRole === 'ADMIN' || userRole === 'MANAGER';
 
@@ -74,6 +86,7 @@ export default function RegistrationsPage() {
   }, [statusFilter, search]);
 
   useEffect(() => {
+    setIsMounted(true);
     fetch('/api/auth/me')
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data?.user) setUserRole(data.user.role); })
@@ -108,6 +121,8 @@ export default function RegistrationsPage() {
 
   const showQr = async (code: string) => {
     try {
+      const QRCodeLib = await import('qrcode');
+      const QRCode = QRCodeLib.default || QRCodeLib;
       const dataUrl = await QRCode.toDataURL(code, { width: 200, margin: 2 });
       setQrModal({ code, dataUrl });
     } catch {
@@ -269,6 +284,42 @@ export default function RegistrationsPage() {
                         >
                           <QrCode className="w-4 h-4" />
                         </button>
+                        {isMounted && (
+                          <BlobProvider document={<ReportCardPdf registration={reg} />}>
+                            {({ url, loading }) => (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => {
+                                  if (url) {
+                                    window.open(url, '_blank');
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title={loading ? 'Preparing PDF...' : 'View Report'}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
+                          </BlobProvider>
+                        )}
+                        {isMounted && (
+                          <PDFDownloadLink
+                            document={<ReportCardPdf registration={reg} />}
+                            fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
+                          >
+                            {({ loading }) => (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                title={loading ? 'Generating PDF...' : 'Print Report Card'}
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+                            )}
+                          </PDFDownloadLink>
+                        )}
                         <button 
                           onClick={() => router.push(`/events/${reg.event.id}`)}
                           className="flex items-center gap-1 bg-white border border-slate-200 hover:border-violet-300 hover:text-violet-700 text-slate-600 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm"
