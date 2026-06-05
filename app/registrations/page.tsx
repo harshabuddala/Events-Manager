@@ -5,10 +5,11 @@ import DashboardLayout from '@/app/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { 
   Users, Search, Filter, Trash2, ArrowRight, Printer, 
-  CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye
+  CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye, IdCard
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
+import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf';
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
@@ -86,6 +87,8 @@ export default function RegistrationsPage() {
   }, [statusFilter, search]);
 
   const [bgImageBase64, setBgImageBase64] = useState<string | null>(null);
+  const [idBgImageBase64, setIdBgImageBase64] = useState<string | null>(null);
+  const [idCardQrCodes, setIdCardQrCodes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -97,7 +100,44 @@ export default function RegistrationsPage() {
     fetchReportCardImageBase64().then((base64) => {
       setBgImageBase64(base64);
     }).catch(console.error);
+
+    fetchIdCardImageBase64().then((base64) => {
+      setIdBgImageBase64(base64);
+    }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (registrations.length === 0) return;
+    const generateAllQrCodes = async () => {
+      try {
+        const QRCodeLib = await import('qrcode');
+        const QRCode = QRCodeLib.default || QRCodeLib;
+        const newQrCodes: Record<string, string> = {};
+        
+        await Promise.all(
+          registrations.map(async (reg) => {
+            if (idCardQrCodes[reg.registrationCode]) return;
+            const dataUrl = await QRCode.toDataURL(reg.registrationCode, {
+              width: 250,
+              margin: 1,
+              color: {
+                dark: '#0a0f2d',
+                light: '#ffffff',
+              },
+            });
+            newQrCodes[reg.registrationCode] = dataUrl;
+          })
+        );
+        
+        if (Object.keys(newQrCodes).length > 0) {
+          setIdCardQrCodes((prev) => ({ ...prev, ...newQrCodes }));
+        }
+      } catch (err) {
+        console.error('Failed to generate QR codes for ID cards:', err);
+      }
+    };
+    generateAllQrCodes();
+  }, [registrations]);
 
   useEffect(() => {
     fetchRegistrations();
@@ -320,6 +360,57 @@ export default function RegistrationsPage() {
                                 disabled={loading}
                                 className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
                                 title={loading ? 'Generating PDF...' : 'Print Report Card'}
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+                            )}
+                          </PDFDownloadLink>
+                        )}
+                        <span className="w-px h-4 bg-slate-200 mx-1" />
+                        {isMounted && (
+                          <BlobProvider 
+                            document={
+                              <IdCardPdf 
+                                registration={reg} 
+                                backgroundImage={idBgImageBase64} 
+                                qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
+                              />
+                            }
+                          >
+                            {({ url, loading }) => (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => {
+                                  if (url) {
+                                    window.open(url, '_blank');
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors"
+                                title={loading ? 'Preparing ID...' : 'View ID Card'}
+                              >
+                                <IdCard className="w-4 h-4" />
+                              </button>
+                            )}
+                          </BlobProvider>
+                        )}
+                        {isMounted && (
+                          <PDFDownloadLink
+                            document={
+                              <IdCardPdf 
+                                registration={reg} 
+                                backgroundImage={idBgImageBase64} 
+                                qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
+                              />
+                            }
+                            fileName={`IDCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
+                          >
+                            {({ loading }) => (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors"
+                                title={loading ? 'Generating ID...' : 'Print ID Card'}
                               >
                                 <Printer className="w-4 h-4" />
                               </button>

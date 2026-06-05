@@ -50,6 +50,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/id_card_design.png',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+      {
         source: '/api/auth/:path*',
         headers: [
           {

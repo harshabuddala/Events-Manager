@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react'
 import { 
   Award, BookOpen, Clock, CheckCircle2, AlertCircle, 
   Send, UserCheck, Star, Shield, ArrowLeft, LogIn,
-  ChevronDown, ScanLine, Printer, Download, Eye
+  ChevronDown, ScanLine, Printer, Download, Eye, IdCard
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf'
+import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf'
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
@@ -39,15 +40,37 @@ export default function ScanClientPage({
   const isEmbed = searchParams.get('embed') === 'true'
   const [registration, setRegistration] = useState(initialRegistration)
   const [isMounted, setIsMounted] = useState(false)
-
   const [bgImageBase64, setBgImageBase64] = useState<string | null>(null)
+  const [idBgImageBase64, setIdBgImageBase64] = useState<string | null>(null)
+  const [idCardQrCode, setIdCardQrCode] = useState<string | null>(null)
 
   useEffect(() => {
     setIsMounted(true)
     fetchReportCardImageBase64().then((base64) => {
       setBgImageBase64(base64)
     }).catch(console.error)
+
+    fetchIdCardImageBase64().then((base64) => {
+      setIdBgImageBase64(base64)
+    }).catch(console.error)
   }, [])
+
+  useEffect(() => {
+    if (!registration) return;
+    import('qrcode').then((QRCodeLib) => {
+      const QRCode = QRCodeLib.default || QRCodeLib;
+      QRCode.toDataURL(registration.registrationCode, {
+        width: 250,
+        margin: 1,
+        color: {
+          dark: '#0a0f2d',
+          light: '#ffffff',
+        },
+      }).then((url) => {
+        setIdCardQrCode(url);
+      }).catch(console.error);
+    }).catch(console.error);
+  }, [registration]);
   const isGrader = session && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR', 'ADMIN', 'MANAGER'].includes(session.role)
 
   const [activeTab, setActiveTab] = useState<'report' | 'grade'>(
@@ -648,61 +671,126 @@ export default function ScanClientPage({
                 )}
               </div>
             </div>
-
-
             {/* Action Buttons (Print + PDF) */}
-            {totalStalls > 0 && (
-              <div className="flex flex-col sm:flex-row gap-3 w-full print:hidden">
-                <button
-                  onClick={() => window.print()}
-                  className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                >
-                  <Printer className="w-4 h-4" />
-                  Print Card
-                </button>
+             {totalStalls > 0 && (
+               <div className="w-full space-y-4 print:hidden">
+                 
+                 {/* Student Report Card Actions */}
+                 <div className="space-y-1.5">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student Report Card</p>
+                   <div className="flex flex-col sm:flex-row gap-3 w-full">
+                     <button
+                       onClick={() => window.print()}
+                       className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                     >
+                       <Printer className="w-4 h-4" />
+                       Print Card
+                     </button>
 
-                {isMounted && (
-                  <BlobProvider document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}>
-                    {({ url, loading }) => (
-                      <button
-                        type="button"
-                        disabled={loading}
-                        onClick={() => {
-                          if (url) {
-                            window.open(url, '_blank');
-                          }
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                      >
-                        <Eye className="w-4 h-4" />
-                        {loading ? 'Preparing...' : 'View Report'}
-                      </button>
-                    )}
-                  </BlobProvider>
-                )}
+                     {isMounted && (
+                       <BlobProvider document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}>
+                         {({ url, loading }) => (
+                           <button
+                             type="button"
+                             disabled={loading}
+                             onClick={() => {
+                               if (url) {
+                                 window.open(url, '_blank');
+                               }
+                             }}
+                             className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                           >
+                             <Eye className="w-4 h-4" />
+                             {loading ? 'Preparing...' : 'View Report'}
+                           </button>
+                         )}
+                       </BlobProvider>
+                     )}
 
-                {isMounted && (
-                  <PDFDownloadLink
-                    document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}
-                    fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
-                    style={{ flex: 1, textDecoration: 'none' }}
-                  >
-                    {({ loading }) => (
-                      <button
-                        type="button"
-                        disabled={loading}
-                        className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                      >
-                        <Download className="w-4 h-4" />
-                        {loading ? 'Generating...' : 'Download PDF'}
-                      </button>
-                    )}
-                  </PDFDownloadLink>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                     {isMounted && (
+                       <PDFDownloadLink
+                         document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}
+                         fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
+                         style={{ flex: 1, textDecoration: 'none' }}
+                       >
+                         {({ loading }) => (
+                           <button
+                             type="button"
+                             disabled={loading}
+                             className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                           >
+                             <Download className="w-4 h-4" />
+                             {loading ? 'Generating...' : 'Download PDF'}
+                           </button>
+                         )}
+                       </PDFDownloadLink>
+                     )}
+                   </div>
+                 </div>
+
+                 {/* Student ID Card Actions */}
+                 <div className="space-y-1.5 pt-1">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student ID Card (A6 Size)</p>
+                   <div className="flex flex-col sm:flex-row gap-3 w-full">
+                     {isMounted && (
+                       <BlobProvider 
+                         document={
+                           <IdCardPdf 
+                             registration={registration} 
+                             backgroundImage={idBgImageBase64} 
+                             qrCodeDataUrl={idCardQrCode} 
+                           />
+                         }
+                       >
+                         {({ url, loading }) => (
+                           <button
+                             type="button"
+                             disabled={loading}
+                             onClick={() => {
+                               if (url) {
+                                 window.open(url, '_blank');
+                               }
+                             }}
+                             className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                           >
+                             <IdCard className="w-4 h-4" />
+                             {loading ? 'Preparing ID...' : 'View ID Card'}
+                           </button>
+                         )}
+                       </BlobProvider>
+                     )}
+
+                     {isMounted && (
+                       <PDFDownloadLink
+                         document={
+                           <IdCardPdf 
+                             registration={registration} 
+                             backgroundImage={idBgImageBase64} 
+                             qrCodeDataUrl={idCardQrCode} 
+                           />
+                         }
+                         fileName={`IDCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
+                         style={{ flex: 1, textDecoration: 'none' }}
+                       >
+                         {({ loading }) => (
+                           <button
+                             type="button"
+                             disabled={loading}
+                             className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                           >
+                             <Download className="w-4 h-4" />
+                             {loading ? 'Generating ID...' : 'Download ID Card'}
+                           </button>
+                         )}
+                       </PDFDownloadLink>
+                     )}
+                   </div>
+                 </div>
+
+                </div>
+              )}
+            </div>
+          )}
 
       </div>
 
