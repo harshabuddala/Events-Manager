@@ -471,7 +471,6 @@ export default function ScanClientPage({
         {/* ==================== STUDENT REPORT CARD TAB ==================== */}
         {activeTab === 'report' && (
           <div className="space-y-4 sm:space-y-5 animate-fade-in">
-            <ReportCardSurface letterhead={registration.event.letterhead}>
               {/* Student Badge Card */}
               <div className="bg-gradient-to-br from-violet-600 to-indigo-700 rounded-3xl p-5 sm:p-6 text-white shadow-lg border border-violet-500/20 relative overflow-hidden print:shadow-none print:border-violet-200">
               {visitedStallsCount === totalStalls && totalStalls > 0 && (
@@ -627,11 +626,11 @@ export default function ScanClientPage({
                 )}
               </div>
             </div>
-            </ReportCardSurface>
+
 
             {/* Action Buttons (Print + PDF) */}
             {totalStalls > 0 && (
-              <div className="flex flex-col sm:flex-row gap-3 print:hidden">
+              <div className="flex gap-3 print:hidden">
                 <button
                   onClick={() => window.print()}
                   className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
@@ -639,15 +638,6 @@ export default function ScanClientPage({
                   <Printer className="w-4 h-4" />
                   Print Report Card
                 </button>
-                <a
-                  href={`/api/scan/${registration.registrationCode}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                >
-                  <Download className="w-4 h-4" />
-                  Download PDF
-                </a>
               </div>
             )}
           </div>
@@ -657,7 +647,7 @@ export default function ScanClientPage({
 
       {/* Floating Scan Button */}
       {isGrader && !isEmbed && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_20px_rgb(0,0,0,0.05)] z-50 print:hidden">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_20px_rgb(0,0,0,0.05)] z-50">
           <div className="max-w-xl mx-auto">
             <button
               onClick={() => router.push('/scan?autostart=true')}
@@ -667,72 +657,8 @@ export default function ScanClientPage({
               Scan Next QR Code
             </button>
           </div>
-         </div>
-       )}
-     </div>
-   )
- }
-
-interface LetterheadInfo {
-  id: string
-  name: string
-  filePath: string
-  cropX: number
-  cropY: number
-  cropW: number
-  cropH: number
-  imageW: number
-  imageH: number
-}
-
-// ReportCardSurface: on screen, renders the report content normally (readable).
-// On print, the wrapper applies CSS variables that globals.css uses to position
-// the content inside the letterhead's crop area on a full A4 page.
-// Backward compatible: if no letterhead, renders children as-is.
-function ReportCardSurface({ letterhead, children }: { letterhead: LetterheadInfo | null | undefined; children: React.ReactNode }) {
-  React.useEffect(() => {
-    if (!letterhead) return
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const url = `/api/letterheads/${letterhead.id}/file`
-    const styleId = `report-print-${letterhead.id}`
-    if (document.getElementById(styleId)) return
-    const style = document.createElement('style')
-    style.id = styleId
-    style.textContent = `
-      @media print {
-        body::before {
-          content: "";
-          position: fixed;
-          top: 0; left: 0;
-          width: 210mm; height: 297mm;
-          background-image: url("${url}");
-          background-size: 210mm 297mm;
-          background-repeat: no-repeat;
-          z-index: -1;
-        }
-      }
-    `
-    document.head.appendChild(style)
-    return () => {
-      const el = document.getElementById(styleId)
-      if (el) el.remove()
-    }
-  }, [letterhead?.id])
-
-  if (!letterhead) {
-    return <>{children}</>
-  }
-
-  const styleVars: React.CSSProperties = {
-    ['--lh-crop-x' as any]: `${(letterhead.cropX / letterhead.imageW) * 100}%`,
-    ['--lh-crop-y' as any]: `${(letterhead.cropY / letterhead.imageH) * 100}%`,
-    ['--lh-crop-w' as any]: `${(letterhead.cropW / letterhead.imageW) * 100}%`,
-    ['--lh-crop-h' as any]: `${(letterhead.cropH / letterhead.imageH) * 100}%`,
-  }
-
-  return (
-    <div className="report-page-wrapper" style={styleVars}>
-      {children}
+        </div>
+      )}
     </div>
   )
 }

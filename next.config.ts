@@ -6,13 +6,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Allow up to 16MB body for letterhead PNG uploads (limit enforced in route)
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '16mb',
-    },
-  },
-  serverExternalPackages: ['@prisma/client', 'prisma', '@react-pdf/renderer'],
+  serverExternalPackages: ['@prisma/client', 'prisma'],
   images: {
     remotePatterns: [
       {

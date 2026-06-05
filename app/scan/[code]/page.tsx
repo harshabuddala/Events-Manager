@@ -19,14 +19,6 @@ export default async function ScanPage({ params }: PageProps) {
       event: {
         include: {
           community: true,
-          letterhead: {
-            where: { isActive: true },
-            select: {
-              id: true, name: true, filePath: true,
-              cropX: true, cropY: true, cropW: true, cropH: true,
-              imageW: true, imageH: true,
-            },
-          },
           stalls: {
             where: { status: 'ACTIVE' },
             select: { id: true, code: true, name: true, metrics: true }

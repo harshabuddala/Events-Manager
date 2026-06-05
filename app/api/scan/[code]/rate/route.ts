@@ -228,31 +228,7 @@ export async function POST(
         }
       }
 
-      const existingReport = await prisma.reportCard.findFirst({
-        where: { studentId: registration.studentId, eventId: registration.eventId }
-      });
 
-      if (existingReport) {
-         await prisma.reportCard.update({
-            where: { id: existingReport.id },
-            data: { totalScore, overallGrade, topSkill, skillsAssessed: gradedVisits.length, status: 'GENERATED', generatedAt: new Date() }
-         });
-      } else {
-         const reportCode = `RC-${Math.floor(1000 + Math.random() * 9000)}`;
-         await prisma.reportCard.create({
-            data: {
-              reportCode,
-              studentId: registration.studentId,
-              eventId: registration.eventId,
-              totalScore,
-              overallGrade,
-              topSkill,
-              skillsAssessed: gradedVisits.length,
-              status: 'GENERATED',
-              generatedAt: new Date()
-            }
-         });
-      }
 
       await prisma.registration.update({
         where: { id: registration.id },
@@ -364,16 +340,7 @@ export async function PATCH(
         }
       }
 
-      const existingReport = await prisma.reportCard.findFirst({
-        where: { studentId: registration.studentId, eventId: registration.eventId }
-      })
 
-      if (existingReport) {
-        await prisma.reportCard.update({
-          where: { id: existingReport.id },
-          data: { totalScore, overallGrade, topSkill, skillsAssessed: gradedVisits.length, status: 'GENERATED', generatedAt: new Date() }
-        })
-      }
     }
 
     return NextResponse.json({ success: true, performance })

@@ -18,7 +18,6 @@ async function main() {
     await prisma.performance.deleteMany()
     await prisma.stallVisit.deleteMany()
     await prisma.volunteerAssignment.deleteMany()
-    await prisma.reportCard.deleteMany()
     await prisma.registration.deleteMany()
     await prisma.stall.deleteMany()
     await prisma.volunteer.deleteMany()
@@ -555,72 +554,7 @@ async function main() {
 
   console.log('Created performances')
 
-  // Create Report Cards
-  await Promise.all([
-    prisma.reportCard.create({
-      data: {
-        reportCode: 'RC-9812',
-        studentId: students[0].id,
-        eventId: events[0].id,
-        totalScore: 94,
-        overallGrade: 'A+',
-        topSkill: 'Mathematics (98%)',
-        skillsAssessed: 5,
-        status: 'GENERATED',
-        generatedAt: new Date('2026-05-26'),
-      },
-    }),
-    prisma.reportCard.create({
-      data: {
-        reportCode: 'RC-9813',
-        studentId: students[2].id,
-        eventId: events[1].id,
-        totalScore: 88,
-        overallGrade: 'A',
-        topSkill: 'Science (95%)',
-        skillsAssessed: 5,
-        status: 'GENERATED',
-        generatedAt: new Date('2026-05-25'),
-      },
-    }),
-    prisma.reportCard.create({
-      data: {
-        reportCode: 'RC-9814',
-        studentId: students[4].id,
-        eventId: events[3].id,
-        totalScore: 76,
-        overallGrade: 'B+',
-        topSkill: 'Arts (92%)',
-        skillsAssessed: 4,
-        status: 'GENERATED',
-        generatedAt: new Date('2026-05-22'),
-      },
-    }),
-    prisma.reportCard.create({
-      data: {
-        reportCode: 'RC-9815',
-        studentId: students[6].id,
-        totalScore: 91,
-        overallGrade: 'A+',
-        topSkill: 'Reasoning (94%)',
-        skillsAssessed: 4,
-        status: 'GENERATED',
-        generatedAt: new Date('2026-05-20'),
-      },
-    }),
-    prisma.reportCard.create({
-      data: {
-        reportCode: 'RC-9816',
-        studentId: students[5].id,
-        totalScore: 0,
-        overallGrade: '-',
-        skillsAssessed: 0,
-        status: 'PENDING',
-      },
-    }),
-  ])
 
-  console.log('Created report cards')
 
   console.log('Database seeding completed!')
 }

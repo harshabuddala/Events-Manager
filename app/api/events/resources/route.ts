@@ -21,18 +21,7 @@ export async function GET() {
       orderBy: { name: 'asc' },
     })
 
-    const letterheads = await prisma.letterhead.findMany({
-      where: { isActive: true },
-      select: {
-        id: true, name: true, fileName: true, sizeBytes: true,
-        cropX: true, cropY: true, cropW: true, cropH: true,
-        imageW: true, imageH: true, createdAt: true,
-        _count: { select: { events: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    return NextResponse.json({ stalls, volunteers, letterheads })
+    return NextResponse.json({ stalls, volunteers })
   } catch (error) {
     console.error('Fetch available resources error:', error instanceof Error ? error.message : 'Unknown')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

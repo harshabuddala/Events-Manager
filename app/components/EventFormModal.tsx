@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Calendar, MapPin, FileText, Hash, Plus, Link2, Trash2, Users, Star, Check, ChevronRight, Building2, User, Mail, Phone, Shield } from 'lucide-react';
+import { X, Calendar, MapPin, FileText, Hash, Plus, Link2, Trash2, Users, Star, Check, ChevronRight, Building2, User, Mail, Phone, Shield, Printer } from 'lucide-react';
 
 type Tab = 'general' | 'stalls' | 'volunteers';
 
@@ -64,6 +64,7 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
   const [error, setError] = useState('');
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [showTestPrint, setShowTestPrint] = useState(false);
 
   // General form data
   const [formData, setFormData] = useState({
@@ -507,6 +508,7 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
   if (!isOpen) return null;
 
   return (
+    <>
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
@@ -906,5 +908,6 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
         </div>
       </div>
     </div>
+    </>
   );
 }

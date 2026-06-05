@@ -54,7 +54,7 @@ export default function EventDetailPage() {
   
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics' | 'template'>('registrations');
+  const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics'>('registrations');
   const [userRole, setUserRole] = useState<string>('');
   const [isAssignedVolunteer, setIsAssignedVolunteer] = useState(false);
 
@@ -118,10 +118,7 @@ export default function EventDetailPage() {
   const [availableStalls, setAvailableStalls] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [availableVolunteers, setAvailableVolunteers] = useState<Array<{ id: string; name: string; role: string; email: string }>>([]);
 
-  // Template tab state
-  const [availableLetterheads, setAvailableLetterheads] = useState<any[] | null>(null);
-  const [templateSaving, setTemplateSaving] = useState(false);
-  const [templateMessage, setTemplateMessage] = useState('');
+
   
   // Modal states
   const [showLinkStall, setShowLinkStall] = useState(false);
@@ -500,7 +497,7 @@ export default function EventDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
-        {(['overview', ...(canManageEvent ? ['stalls', 'volunteers', 'analytics', 'template'] as const : []), 'registrations'] as const).map(tab => (
+        {(['overview', ...(canManageEvent ? ['stalls', 'volunteers', 'analytics'] as const : []), 'registrations'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => {
@@ -519,12 +516,6 @@ export default function EventDetailPage() {
                   .then(d => setAnalytics(d))
                   .finally(() => setAnalyticsLoading(false));
               }
-              if (tab === 'template' && !availableLetterheads) {
-                fetch('/api/letterheads')
-                  .then(r => r.ok ? r.json() : null)
-                  .then(d => setAvailableLetterheads(d?.letterheads || []))
-                  .catch(() => {});
-              }
             }}
             className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${
               activeTab === tab ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -535,7 +526,6 @@ export default function EventDetailPage() {
             {tab === 'volunteers' && `Volunteers (${event.assignments.length})`}
             {tab === 'registrations' && `Registrations (${event._count.registrations})`}
             {tab === 'analytics' && 'Analytics'}
-            {tab === 'template' && 'Template'}
           </button>
         ))}
       </div>
@@ -2022,200 +2012,6 @@ export default function EventDetailPage() {
         );
       })()}
 
-      {/* ==================== TEMPLATE TAB ==================== */}
-      {activeTab === 'template' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">Report Template</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Pick the letterhead that will be used when printing report cards for this event.
-                </p>
-              </div>
-              <a
-                href="/settings/templates"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1"
-              >
-                Manage Templates →
-              </a>
-            </div>
-
-            <div className="p-5 space-y-4">
-              {templateMessage && (
-                <div className={`text-xs font-semibold rounded-lg p-3 ${
-                  templateMessage.startsWith('✓')
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                    : 'bg-rose-50 border border-rose-200 text-rose-700'
-                }`}>
-                  {templateMessage}
-                </div>
-              )}
-
-              {/* Current selection */}
-              {event.letterhead ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <div
-                    className="relative shrink-0 shadow-sm border border-slate-200"
-                    style={{
-                      width: '80px',
-                      aspectRatio: `${event.letterhead.imageW} / ${event.letterhead.imageH}`,
-                      backgroundImage: `url(/api/letterheads/${event.letterhead.id}/file)`,
-                      backgroundSize: '100% 100%',
-                      backgroundRepeat: 'no-repeat',
-                      backgroundColor: 'white',
-                    }}
-                  >
-                    <div
-                      className="absolute border-2 border-violet-500 bg-violet-500/10"
-                      style={{
-                        left: `${(event.letterhead.cropX / event.letterhead.imageW) * 100}%`,
-                        top: `${(event.letterhead.cropY / event.letterhead.imageH) * 100}%`,
-                        width: `${(event.letterhead.cropW / event.letterhead.imageW) * 100}%`,
-                        height: `${(event.letterhead.cropH / event.letterhead.imageH) * 100}%`,
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-extrabold text-slate-800">{event.letterhead.name}</p>
-                    <p className="text-[10px] font-mono text-slate-500 mt-0.5">
-                      {event.letterhead.imageW} × {event.letterhead.imageH}px · Crop {event.letterhead.cropW} × {event.letterhead.cropH}px
-                    </p>
-                    <p className="text-[11px] text-emerald-600 font-semibold mt-1">✓ Active for this event</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <a
-                      href={`/api/events/${eventId}/test-print`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg transition-colors"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      Test Print
-                    </a>
-                    <button
-                      onClick={async () => {
-                        setTemplateSaving(true);
-                        setTemplateMessage('');
-                        const res = await fetch(`/api/events/${eventId}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ letterheadId: null }),
-                        });
-                        if (res.ok) {
-                          setTemplateMessage('✓ Template removed. Reports will print without background.');
-                          fetchEvent();
-                        } else {
-                          const d = await res.json().catch(() => ({}));
-                          setTemplateMessage(d.error || 'Failed to remove template');
-                        }
-                        setTemplateSaving(false);
-                      }}
-                      disabled={templateSaving}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-                  <p className="text-xs font-semibold text-amber-800">No template assigned.</p>
-                  <p className="text-[11px] text-amber-700 mt-1">Reports for this event will print without a background.</p>
-                </div>
-              )}
-
-              {/* Picker */}
-              {availableLetterheads === null ? (
-                <div className="text-center py-4 text-slate-400 text-xs">Loading templates…</div>
-              ) : availableLetterheads.length === 0 ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
-                  <FileImage className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                  <p className="text-xs font-semibold text-slate-500 mb-1">No templates uploaded yet</p>
-                  <p className="text-[11px] text-slate-400 mb-3">
-                    Create your first A4 letterhead template to start printing branded reports.
-                  </p>
-                  <a
-                    href="/settings/templates"
-                    className="inline-flex items-center gap-1.5 bg-violet-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-violet-700 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Upload Template
-                  </a>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Available Templates ({availableLetterheads.length})
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {availableLetterheads.map((lh: any) => {
-                      const isCurrent = event.letterhead?.id === lh.id
-                      return (
-                        <button
-                          key={lh.id}
-                          onClick={async () => {
-                            setTemplateSaving(true);
-                            setTemplateMessage('');
-                            const res = await fetch(`/api/events/${eventId}`, {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ letterheadId: lh.id }),
-                            });
-                            if (res.ok) {
-                              setTemplateMessage(`✓ Template set to "${lh.name}"`);
-                              fetchEvent();
-                            } else {
-                              const d = await res.json().catch(() => ({}));
-                              setTemplateMessage(d.error || 'Failed to set template');
-                            }
-                            setTemplateSaving(false);
-                          }}
-                          disabled={templateSaving}
-                          className={`text-left rounded-xl border-2 p-2 transition-all relative ${
-                            isCurrent
-                              ? 'border-violet-500 bg-violet-50/50'
-                              : 'border-slate-200 hover:border-violet-300 bg-white'
-                          }`}
-                        >
-                          <div
-                            className="relative bg-slate-100 rounded-md overflow-hidden"
-                            style={{
-                              width: '100%',
-                              aspectRatio: `${lh.imageW} / ${lh.imageH}`,
-                              backgroundImage: `url(/api/letterheads/${lh.id}/file)`,
-                              backgroundSize: '100% 100%',
-                              backgroundRepeat: 'no-repeat',
-                            }}
-                          >
-                            <div
-                              className="absolute border border-violet-500 bg-violet-500/20"
-                              style={{
-                                left: `${(lh.cropX / lh.imageW) * 100}%`,
-                                top: `${(lh.cropY / lh.imageH) * 100}%`,
-                                width: `${(lh.cropW / lh.imageW) * 100}%`,
-                                height: `${(lh.cropH / lh.imageH) * 100}%`,
-                              }}
-                            />
-                          </div>
-                          <p className="text-[10px] font-bold text-slate-700 mt-1.5 truncate">{lh.name}</p>
-                          <p className="text-[9px] font-mono text-slate-400">{lh.imageW}×{lh.imageH}</p>
-                          {isCurrent && (
-                            <div className="absolute top-1 right-1 bg-violet-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">
-                              CURRENT
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   );
 }

@@ -12,9 +12,8 @@ export async function GET() {
     const totalRegistrations = await prisma.registration.count()
     const totalCommunities = await prisma.community.count()
     const totalStallVisits = await prisma.stallVisit.count()
-    const totalReportCards = await prisma.reportCard.count({ where: { status: { not: 'PENDING' } } })
-
     const completedRegs = await prisma.registration.count({ where: { status: 'COMPLETED' } })
+    const totalReportCards = completedRegs
     const completionRate = totalRegistrations > 0
       ? Math.round((completedRegs / totalRegistrations) * 100 * 10) / 10
       : 0
@@ -90,19 +89,14 @@ export async function GET() {
       },
     })
 
-    const recentReports = await prisma.reportCard.findMany({
-      take: 2,
-      orderBy: { generatedAt: 'desc' },
-      where: { status: 'GENERATED' },
-      include: { student: { select: { rollNumber: true } } },
-    })
+
 
     const liveActivities: Array<{
       id: string
       title: string
       roll: string
       time: string
-      type: 'register' | 'score' | 'complete' | 'report'
+      type: 'register' | 'score' | 'complete'
     }> = [
       ...recentRegs.map(r => ({
         id: `reg-${r.id}`,
@@ -117,13 +111,6 @@ export async function GET() {
         roll: v.student.rollNumber,
         time: formatTimeAgo(v.visitedAt),
         type: (v.completedAt ? 'complete' : 'score') as 'complete' | 'score',
-      })),
-      ...recentReports.map(r => ({
-        id: `report-${r.id}`,
-        title: 'Report card generated',
-        roll: r.student.rollNumber,
-        time: formatTimeAgo(r.generatedAt!),
-        type: 'report' as const,
       })),
     ].slice(0, 6)
 
@@ -165,7 +152,7 @@ export async function GET() {
       { label: 'Visited ≥ 1', val: visitedOneCount, pct: totalRegistered > 0 ? `${Math.round((visitedOneCount / totalRegistered) * 100)}%` : '0%', color: 'bg-blue-500' },
       { label: 'Visited ≥ 3', val: visitedThree, pct: totalRegistered > 0 ? `${Math.round((visitedThree / totalRegistered) * 100)}%` : '0%', color: 'bg-teal-400' },
       { label: 'Visited All', val: visitedAllCount, pct: totalRegistered > 0 ? `${Math.round((visitedAllCount / totalRegistered) * 100)}%` : '0%', color: 'bg-emerald-500' },
-      { label: 'Report Generated', val: reportsGenerated, pct: totalRegistered > 0 ? `${Math.round((reportsGenerated / totalRegistered) * 100)}%` : '0%', color: 'bg-orange-400' },
+      { label: 'Registration Completed', val: reportsGenerated, pct: totalRegistered > 0 ? `${Math.round((reportsGenerated / totalRegistered) * 100)}%` : '0%', color: 'bg-orange-400' },
     ]
 
     const liveEvents = await prisma.event.count({ where: { status: 'LIVE' } })

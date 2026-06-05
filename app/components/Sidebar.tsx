@@ -32,7 +32,6 @@ const mainNavItems: NavItem[] = [
   { path: '/registrations', label: 'Registrations', icon: FileText, roles: ['ADMIN', 'MANAGER'] },
   { path: '/stalls', label: 'Stalls', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER'] },
   { path: '/volunteers', label: 'Volunteers', icon: UserCheck, roles: ['ADMIN', 'MANAGER', 'VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR'] },
-  { path: '/reports', label: 'Report Cards', icon: FileOutput, roles: ['ADMIN', 'MANAGER'] },
 ];
 
 const volunteerNavItems: NavItem[] = [
@@ -51,7 +50,6 @@ const analyticsNavItems: NavItem[] = [
 
 const settingsNavItems: NavItem[] = [
   { path: '/settings/users', label: 'Users & Roles', icon: Users, roles: ['ADMIN', 'MANAGER'] },
-  { path: '/settings/templates', label: 'Report Templates', icon: FileImage, roles: ['ADMIN', 'MANAGER'] },
   { path: '/settings/general', label: 'Settings', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
 ];
 

@@ -10,7 +10,6 @@ const updateSchema = z.object({
   endDate: z.string().datetime().optional().or(z.literal('')),
   status: z.enum(['UPCOMING', 'LIVE', 'COMPLETED', 'CANCELLED']).optional(),
   description: z.string().max(2000).optional().or(z.literal('')),
-  letterheadId: z.string().uuid().nullable().optional(),
 })
 
 export async function GET(
@@ -30,13 +29,6 @@ export async function GET(
       include: {
         community: { select: { name: true, location: true } },
         organizer: { select: { name: true } },
-        letterhead: {
-          select: {
-            id: true, name: true, filePath: true, mimeType: true,
-            cropX: true, cropY: true, cropW: true, cropH: true,
-            imageW: true, imageH: true, isActive: true,
-          },
-        },
         stalls: { select: { id: true, code: true, name: true, status: true } },
         assignments: {
           include: {
@@ -80,15 +72,6 @@ export async function PUT(
     if (data.endDate === '') data.endDate = null
     if (data.date) data.date = new Date(data.date)
     if (data.endDate) data.endDate = new Date(data.endDate)
-    if (data.letterheadId === '') data.letterheadId = null
-
-    // Validate letterhead exists if provided
-    if (data.letterheadId) {
-      const lh = await prisma.letterhead.findUnique({ where: { id: data.letterheadId } })
-      if (!lh || !lh.isActive) {
-        return NextResponse.json({ error: 'Selected letterhead is not available' }, { status: 400 })
-      }
-    }
 
     const event = await prisma.event.update({
       where: { id },
