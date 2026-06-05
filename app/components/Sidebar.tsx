@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Calendar, Users, FileText, ShoppingBag, UserCheck, 
   BarChart3, Settings, Users2, ChevronDown, GraduationCap,
   PieChart as PieChartIcon, TrendingUp, FileOutput, X, LogOut,
-  ScanLine, ClipboardCheck, Clock, Star, HelpCircle, Smartphone
+  ScanLine, ClipboardCheck, Clock, Star, HelpCircle, Smartphone, FileImage
 } from 'lucide-react';
 import QrLoginGenerator from './QrLoginGenerator';
 
@@ -51,6 +51,7 @@ const analyticsNavItems: NavItem[] = [
 
 const settingsNavItems: NavItem[] = [
   { path: '/settings/users', label: 'Users & Roles', icon: Users, roles: ['ADMIN', 'MANAGER'] },
+  { path: '/settings/templates', label: 'Report Templates', icon: FileImage, roles: ['ADMIN', 'MANAGER'] },
   { path: '/settings/general', label: 'Settings', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
 ];
 

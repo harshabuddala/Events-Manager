@@ -13,6 +13,7 @@ const createSchema = z.object({
   endDate: z.string().datetime().optional().or(z.literal('')),
   status: eventStatusEnum.optional(),
   description: z.string().max(2000).optional().or(z.literal('')),
+  letterheadId: z.string().uuid().nullable().optional(),
 })
 
 const updateSchema = z.object({
@@ -35,6 +36,7 @@ export async function GET() {
       include: {
         community: { select: { name: true, location: true } },
         organizer: { select: { name: true } },
+        letterhead: { select: { id: true, name: true } },
         _count: { select: { registrations: true, stalls: true, assignments: true } },
       },
       orderBy: { date: 'desc' },
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
         ...result.data,
         endDate: result.data.endDate || null,
         description: result.data.description || null,
+        letterheadId: result.data.letterheadId || null,
         organizerId: session.id,
         status: result.data.status || 'UPCOMING',
       },

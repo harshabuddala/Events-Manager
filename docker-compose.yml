@@ -86,6 +86,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    volumes:
+      - edunura-uploads:/app/uploads
     deploy:
       resources:
         limits:
@@ -111,6 +113,8 @@ services:
 # =============================================================================
 volumes:
   edunura-db-data:
+    driver: local
+  edunura-uploads:
     driver: local
 
 # =============================================================================

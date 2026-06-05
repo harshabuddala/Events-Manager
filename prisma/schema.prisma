@@ -7,6 +7,36 @@ datasource db {
   provider = "postgresql"
 }
 
+// ==================== LETTERHEAD / TEMPLATE ====================
+
+// A printable A4 background image (PNG) designed in Canva / Photoshop,
+// with a content rectangle defined in image-pixel coordinates (cropX/Y/W/H).
+// Admins upload; events reference one to brand their report cards.
+
+model Letterhead {
+  id        String   @id @default(uuid())
+  name      String
+  filePath  String   // relative to project root, e.g. /uploads/letterheads/{uuid}.png
+  fileName  String
+  mimeType  String   @default("image/png")
+  sizeBytes Int
+  // Crop area in IMAGE pixels (the rectangle where the report is printed)
+  cropX     Int
+  cropY     Int
+  cropW     Int
+  cropH     Int
+  // Original image dimensions (used to scale at print time)
+  imageW    Int
+  imageH    Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[] @relation("EventLetterhead")
+
+  @@map("letterheads")
+}
+
 // ==================== ENUMS ====================
 
 enum UserRole {
@@ -98,21 +128,23 @@ model Community {
 }
 
 model Event {
-  id          String      @id @default(uuid())
-  code        String      @unique
-  name        String
-  communityId String
-  organizerId String
-  date        DateTime
-  endDate     DateTime?
-  status      EventStatus @default(UPCOMING)
-  description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            String      @id @default(uuid())
+  code          String      @unique
+  name          String
+  communityId   String
+  organizerId   String
+  date          DateTime
+  endDate       DateTime?
+  status        EventStatus @default(UPCOMING)
+  description   String?
+  letterheadId  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   // Relations
   community     Community            @relation(fields: [communityId], references: [id])
   organizer     User                 @relation("EventOrganizer", fields: [organizerId], references: [id])
+  letterhead    Letterhead?          @relation("EventLetterhead", fields: [letterheadId], references: [id], onDelete: SetNull)
   registrations Registration[]
   stalls        Stall[]
   assignments   VolunteerAssignment[]

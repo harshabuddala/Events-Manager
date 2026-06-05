@@ -69,6 +69,9 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Ensure uploads directory exists (letterheads stored here at runtime)
+RUN mkdir -p /app/uploads/letterheads && chown -R nextjs:nodejs /app/uploads
+
 # Copy generated Prisma client (custom output path in schema)
 COPY --from=builder /app/generated/prisma ./generated/prisma
 

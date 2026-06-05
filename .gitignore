@@ -9,5 +9,12 @@ coverage/
 
 /generated/prisma
 
+# TypeScript build cache (regenerated on every build)
+/tsconfig.tsbuildinfo
+
+# Uploaded letterhead images (regenerated at runtime)
+/uploads/letterheads/*
+!/uploads/letterheads/.gitkeep
+
 certificates
 /certs

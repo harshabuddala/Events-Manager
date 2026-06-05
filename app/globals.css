@@ -178,3 +178,46 @@
     padding-right: env(safe-area-inset-right);
   }
 }
+
+/* ========================================
+   REPORT CARD PRINT LAYOUT (with letterhead)
+   ======================================== */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* The letterhead URL is injected as a <style> tag by ReportCardSurface
+     when a letterhead is active. This positions the body::before pseudo
+     element to render the letterhead behind the first page. */
+
+  .report-page-wrapper {
+    /* Position the report content at the top-left of the letterhead crop area */
+    position: absolute;
+    top: calc(var(--lh-crop-y, 5%) * 297mm);
+    left: calc(var(--lh-crop-x, 7%) * 210mm);
+    width: calc(var(--lh-crop-w, 86%) * 210mm);
+    /* Height is auto — content flows naturally; may span multiple A4 pages */
+  }
+
+  /* Ensure children fit the constrained width on print */
+  .report-page-wrapper * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Hide non-print elements (screen buttons, header bars, etc.) */
+  .print\:hidden {
+    display: none !important;
+  }
+}
