@@ -8,7 +8,7 @@ import {
   CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { ReportCardPdf } from '@/app/components/ReportCardPdf';
+import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
@@ -85,12 +85,18 @@ export default function RegistrationsPage() {
     }
   }, [statusFilter, search]);
 
+  const [bgImageBase64, setBgImageBase64] = useState<string | null>(null);
+
   useEffect(() => {
     setIsMounted(true);
     fetch('/api/auth/me')
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data?.user) setUserRole(data.user.role); })
       .catch(() => {});
+    
+    fetchReportCardImageBase64().then((base64) => {
+      setBgImageBase64(base64);
+    }).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -285,7 +291,7 @@ export default function RegistrationsPage() {
                           <QrCode className="w-4 h-4" />
                         </button>
                         {isMounted && (
-                          <BlobProvider document={<ReportCardPdf registration={reg} />}>
+                          <BlobProvider document={<ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />}>
                             {({ url, loading }) => (
                               <button
                                 type="button"
@@ -305,7 +311,7 @@ export default function RegistrationsPage() {
                         )}
                         {isMounted && (
                           <PDFDownloadLink
-                            document={<ReportCardPdf registration={reg} />}
+                            document={<ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />}
                             fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
                           >
                             {({ loading }) => (

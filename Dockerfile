@@ -45,7 +45,7 @@ COPY hooks ./hooks/
 COPY middleware.ts ./
 COPY entrypoint.sh ./
 COPY prisma.config.ts ./
-# Note: Add public directory copy here if you create one in the future
+COPY public ./public/
 
 # Build Next.js (standalone output)
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -66,6 +66,7 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy standalone output
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 

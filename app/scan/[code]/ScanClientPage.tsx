@@ -9,7 +9,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { ReportCardPdf } from '@/app/components/ReportCardPdf'
+import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf'
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
@@ -40,8 +40,13 @@ export default function ScanClientPage({
   const [registration, setRegistration] = useState(initialRegistration)
   const [isMounted, setIsMounted] = useState(false)
 
+  const [bgImageBase64, setBgImageBase64] = useState<string | null>(null)
+
   useEffect(() => {
     setIsMounted(true)
+    fetchReportCardImageBase64().then((base64) => {
+      setBgImageBase64(base64)
+    }).catch(console.error)
   }, [])
   const isGrader = session && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR', 'ADMIN', 'MANAGER'].includes(session.role)
 
@@ -657,7 +662,7 @@ export default function ScanClientPage({
                 </button>
 
                 {isMounted && (
-                  <BlobProvider document={<ReportCardPdf registration={registration} />}>
+                  <BlobProvider document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}>
                     {({ url, loading }) => (
                       <button
                         type="button"
@@ -678,7 +683,7 @@ export default function ScanClientPage({
 
                 {isMounted && (
                   <PDFDownloadLink
-                    document={<ReportCardPdf registration={registration} />}
+                    document={<ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />}
                     fileName={`ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`}
                     style={{ flex: 1, textDecoration: 'none' }}
                   >

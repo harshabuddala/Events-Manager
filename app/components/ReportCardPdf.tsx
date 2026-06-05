@@ -1,6 +1,53 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
+let cachedBase64Image: string | null = null;
+let imageFetchPromise: Promise<string> | null = null;
+
+export const fetchReportCardImageBase64 = async (): Promise<string> => {
+  if (typeof window === 'undefined') return '/report_card_design.png';
+  if (cachedBase64Image) return cachedBase64Image;
+  if (imageFetchPromise) return imageFetchPromise;
+  
+  imageFetchPromise = (async () => {
+    try {
+      console.log("[DEBUG] Fetching report card design template from origin...");
+      const origin = window.location.origin;
+      const url = `${origin}/report_card_design.png`;
+      console.log(`[DEBUG] Attempting fetch to: ${url}`);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      console.log(`[DEBUG] Image loaded, size: ${blob.size} bytes, type: ${blob.type}`);
+      
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          cachedBase64Image = base64data;
+          console.log("[DEBUG] Successfully converted image to base64 data URI.");
+          resolve(base64data);
+        };
+        reader.onerror = (err) => {
+          console.error("[DEBUG] FileReader error:", err);
+          reject(err);
+        };
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error("[DEBUG] Error pre-fetching background image:", error);
+      // Fallback to absolute URL if fetch fails
+      return `${window.location.origin}/report_card_design.png`;
+    }
+  })();
+  
+  return imageFetchPromise;
+};
+
 const styles = StyleSheet.create({
   page: {
     padding: 0,
@@ -129,9 +176,10 @@ const styles = StyleSheet.create({
 
 interface ReportCardPdfProps {
   registration: any;
+  backgroundImage?: string | null;
 }
 
-export const ReportCardPdf = ({ registration }: ReportCardPdfProps) => {
+export const ReportCardPdf = ({ registration, backgroundImage }: ReportCardPdfProps) => {
   const { student, event, stallVisits = [] } = registration;
   const stalls = event?.stalls || [];
   
@@ -190,7 +238,7 @@ export const ReportCardPdf = ({ registration }: ReportCardPdfProps) => {
         <Image 
           fixed 
           style={styles.background} 
-          src={typeof window !== 'undefined' ? `${window.location.origin}/report_card_design.png` : '/report_card_design.png'} 
+          src={backgroundImage || (typeof window !== 'undefined' ? `${window.location.origin}/report_card_design.png` : '/report_card_design.png')} 
         />
 
         <View style={styles.contentWrapper}>

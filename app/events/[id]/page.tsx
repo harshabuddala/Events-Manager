@@ -14,7 +14,7 @@ import {
   Star, Send, Award, Trash2, Printer, FileImage, Eye
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { ReportCardPdf } from '@/app/components/ReportCardPdf';
+import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
@@ -70,6 +70,8 @@ export default function EventDetailPage() {
   const [isAssignedVolunteer, setIsAssignedVolunteer] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
+  const [bgImageBase64, setBgImageBase64] = useState<string | null>(null);
+
   useEffect(() => {
     setIsMounted(true);
     fetch('/api/auth/me')
@@ -91,6 +93,10 @@ export default function EventDetailPage() {
         }
       })
       .catch(console.error);
+
+    fetchReportCardImageBase64().then((base64) => {
+      setBgImageBase64(base64);
+    }).catch(console.error);
   }, [eventId]);
 
   const canManageEvent = userRole === 'ADMIN' || userRole === 'MANAGER';
@@ -1127,6 +1133,7 @@ export default function EventDetailPage() {
                                        stalls: reg.event?.stalls || event?.stalls || []
                                      }
                                    }} 
+                                   backgroundImage={bgImageBase64}
                                  />
                                }
                              >
@@ -1158,6 +1165,7 @@ export default function EventDetailPage() {
                                       stalls: reg.event?.stalls || event?.stalls || []
                                     }
                                   }} 
+                                  backgroundImage={bgImageBase64}
                                 />
                               }
                               fileName={`ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`}
