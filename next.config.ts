@@ -41,6 +41,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/report_card_design.png',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+      {
         source: '/api/auth/:path*',
         headers: [
           {
