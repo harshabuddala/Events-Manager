@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
-import { X, Upload, Image as ImageIcon, AlertCircle } from 'lucide-react'
+import React, { useEffect, useRef, useState, useLayoutEffect } from 'react'
+import { X, Upload, Image as ImageIcon, AlertCircle, Loader2 } from 'lucide-react'
 
 // Cropper is browser-only; import dynamically to avoid SSR "HTMLElement is not defined"
 type CropperType = any
@@ -50,14 +50,19 @@ export default function LetterheadFormModal({
   const [crop, setCrop] = useState({ x: 0, y: 0, w: 0, h: 0 })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [cropperReady, setCropperReady] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [cropperLoading, setCropperLoading] = useState(false)
 
   const imageRef = useRef<HTMLImageElement | null>(null)
-  const cropperRef = useRef<Cropper | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const cropperRef = useRef<any>(null)
 
+  // Reset state when modal opens
   useEffect(() => {
     if (!isOpen) return
     setError('')
+    setCropperReady(false)
+    setImageLoaded(false)
     if (editLetterhead) {
       setName(editLetterhead.name)
       setImageUrl(`/api/letterheads/${editLetterhead.id}/file`)
@@ -77,24 +82,38 @@ export default function LetterheadFormModal({
     }
   }, [isOpen, editLetterhead])
 
-  // Initialize cropper when image loads
+  // Preload cropper when modal opens
   useEffect(() => {
-    if (!imageUrl || !imageRef.current || !isOpen) return
+    if (!isOpen) return
+    setCropperLoading(true)
+    getCropper()
+      .then(() => setCropperLoading(false))
+      .catch(() => setCropperLoading(false))
+  }, [isOpen])
+
+  // Initialize cropper once image is loaded and cropper class is ready
+  useLayoutEffect(() => {
+    if (!isOpen || !imageUrl || !imageRef.current || !imageLoaded || cropperLoading) return
+
     const imgEl = imageRef.current
+    // Only init if not already attached
+    if (cropperRef.current) return
 
-    // Destroy previous cropper
-    if (cropperRef.current) {
-      cropperRef.current.destroy()
-      cropperRef.current = null
-    }
-
-    const initCropper = async () => {
-      if (!imageRef.current) return
+    let cancelled = false
+    ;(async () => {
       const CropperCtor = await getCropper()
+      if (cancelled || !imageRef.current) return
+      // Final guard: image must have dimensions
+      if (imageRef.current.clientWidth === 0 || imageRef.current.clientHeight === 0) {
+        // Wait one frame for layout
+        await new Promise(r => requestAnimationFrame(r))
+        if (cancelled || !imageRef.current) return
+      }
       const cropper = new CropperCtor(imageRef.current, {
         viewMode: 1,
         autoCropArea: editLetterhead ? 1 : 0.7,
         responsive: true,
+        restore: false,
         background: false,
         movable: true,
         resizable: true,
@@ -107,6 +126,8 @@ export default function LetterheadFormModal({
         cropBoxMovable: true,
         cropBoxResizable: true,
         toggleDragModeOnDblclick: false,
+        minContainerWidth: 320,
+        minContainerHeight: 240,
         ready() {
           if (editLetterhead) {
             cropper.setData({
@@ -118,6 +139,7 @@ export default function LetterheadFormModal({
           }
           const d = cropper.getData()
           setCrop({ x: Math.round(d.x), y: Math.round(d.y), w: Math.round(d.width), h: Math.round(d.height) })
+          setCropperReady(true)
         },
         crop(event: any) {
           const d = event.detail
@@ -125,21 +147,16 @@ export default function LetterheadFormModal({
         },
       })
       cropperRef.current = cropper
-    }
-
-    if (imgEl.complete && imgEl.naturalWidth > 0) {
-      initCropper()
-    } else {
-      imgEl.addEventListener('load', initCropper, { once: true })
-    }
+    })()
 
     return () => {
+      cancelled = true
       if (cropperRef.current) {
-        cropperRef.current.destroy()
+        try { cropperRef.current.destroy() } catch {}
         cropperRef.current = null
       }
     }
-  }, [imageUrl, isOpen, editLetterhead])
+  }, [imageUrl, isOpen, editLetterhead, imageLoaded, cropperLoading])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -154,6 +171,12 @@ export default function LetterheadFormModal({
     }
     setError('')
     setFile(f)
+    setImageLoaded(false)
+    setCropperReady(false)
+    if (cropperRef.current) {
+      try { cropperRef.current.destroy() } catch {}
+      cropperRef.current = null
+    }
     if (imageUrl && imageUrl.startsWith('blob:')) {
       URL.revokeObjectURL(imageUrl)
     }
@@ -162,6 +185,10 @@ export default function LetterheadFormModal({
     const img = new window.Image()
     img.onload = () => setImageDims({ w: img.naturalWidth, h: img.naturalHeight })
     img.src = url
+  }
+
+  const handleImageLoad = () => {
+    setImageLoaded(true)
   }
 
   const handleSave = async () => {
@@ -183,7 +210,6 @@ export default function LetterheadFormModal({
     try {
       let res: Response
       if (editLetterhead) {
-        // Update name + crop only
         res = await fetch(`/api/letterheads/${editLetterhead.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -229,8 +255,8 @@ export default function LetterheadFormModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 shrink-0">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold text-slate-800">
               {editLetterhead ? 'Edit Template' : 'New Report Template'}
@@ -244,7 +270,7 @@ export default function LetterheadFormModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 min-h-0">
           {/* Name */}
           <div>
             <label className="text-xs font-bold text-slate-700">Template Name</label>
@@ -277,36 +303,6 @@ export default function LetterheadFormModal({
             </div>
           )}
 
-          {/* Cropper */}
-          {imageUrl && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-700">Print Area</label>
-                {imageDims && (
-                  <span className="text-[10px] font-mono text-slate-500">
-                    Image: {imageDims.w} × {imageDims.h}px
-                  </span>
-                )}
-              </div>
-              <div
-                ref={containerRef}
-                className="bg-slate-100 border border-slate-200 rounded-xl overflow-hidden"
-                style={{ minHeight: '360px', maxHeight: '60vh' }}
-              >
-                <img
-                  ref={imageRef}
-                  src={imageUrl}
-                  alt="Letterhead preview"
-                  className="block max-w-full"
-                  crossOrigin="anonymous"
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 mt-2">
-                Drag the highlighted box to position it over the empty area. Use the corner handles to resize.
-              </p>
-            </div>
-          )}
-
           {error && (
             <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-lg p-3">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -315,29 +311,67 @@ export default function LetterheadFormModal({
           )}
         </div>
 
-        <div className="px-5 sm:px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <div className="text-[11px] font-mono text-slate-500 hidden sm:block">
-            {imageDims && crop.w > 0 && (
-              <>
-                Crop · X:{crop.x} Y:{crop.y} W:{crop.w} H:{crop.h}
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+        {/* Cropper — outside scrolling container, fixed-aspect area with stable dimensions */}
+        {imageUrl && (
+          <div className="px-5 sm:px-6 pb-4 shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-slate-700">Print Area</label>
+              <div className="flex items-center gap-3">
+                {imageDims && (
+                  <span className="text-[10px] font-mono text-slate-500">
+                    Image: {imageDims.w} × {imageDims.h}px
+                  </span>
+                )}
+                {imageDims && (
+                  <span className="text-[10px] font-mono text-slate-500">
+                    Crop: {crop.w} × {crop.h}px
+                  </span>
+                )}
+              </div>
+            </div>
+            <div
+              className="relative bg-slate-100 border border-slate-200 rounded-xl overflow-hidden w-full"
+              style={{ height: '52vh', minHeight: '420px' }}
             >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg disabled:opacity-60"
-            >
-              {saving ? 'Saving…' : editLetterhead ? 'Save Changes' : 'Create Template'}
-            </button>
+              <img
+                ref={imageRef}
+                src={imageUrl}
+                alt="Letterhead preview"
+                onLoad={handleImageLoad}
+                className="block max-w-full"
+                style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', margin: '0 auto' }}
+                crossOrigin="anonymous"
+              />
+              {/* Loading overlay */}
+              {(!imageLoaded || !cropperReady || cropperLoading) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/80 backdrop-blur-sm pointer-events-none">
+                  <Loader2 className="w-6 h-6 text-violet-600 animate-spin" />
+                  <span className="text-xs font-semibold text-slate-500 mt-2">
+                    {!imageLoaded ? 'Loading image…' : cropperLoading ? 'Loading cropper…' : 'Preparing canvas…'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2 text-center">
+              Drag the highlighted box to position it over the empty area. Use the corner handles to resize.
+            </p>
           </div>
+        )}
+
+        <div className="px-5 sm:px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2 shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !cropperReady}
+            className="px-4 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : editLetterhead ? 'Save Changes' : 'Create Template'}
+          </button>
         </div>
       </div>
     </div>
