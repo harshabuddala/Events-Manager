@@ -187,7 +187,11 @@ export const ReportCardPdf = ({ registration }: ReportCardPdfProps) => {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Image fixed style={styles.background} src="/report_card_design.png" />
+        <Image 
+          fixed 
+          style={styles.background} 
+          src={typeof window !== 'undefined' ? `${window.location.origin}/report_card_design.png` : '/report_card_design.png'} 
+        />
 
         <View style={styles.contentWrapper}>
           {/* Student Name and Title */}
