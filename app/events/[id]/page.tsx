@@ -13,9 +13,10 @@ import {
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
   Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2, Copy, Check
 } from 'lucide-react';
-import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
-import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf';
-// We will load @react-pdf/renderer dynamically inside our dynamic PDF generation handlers to prevent SSR issues.
+import { fetchReportCardImageBase64 } from '@/lib/letterheads';
+import { fetchIdCardImageBase64 } from '@/lib/letterheads';
+// ReportCardPdf and IdCardPdf are loaded dynamically inside the PDF generation
+// handlers to keep @react-pdf/renderer out of the initial client bundle.
 
 interface EventDetail {
   id: string;
@@ -408,7 +409,7 @@ export default function EventDetailPage() {
     setShowQrModal(true);
     setQrCodeDataUrl('');
     
-    const scanUrl = `${window.location.origin}/scan/${reg.registrationCode}`;
+    const scanUrl = `${window.location.origin}/r/${reg.qrToken || reg.registrationCode}`;
     try {
       const { generateLogoQrCode } = await import('@/lib/qr');
       const url = await generateLogoQrCode(scanUrl, 300);
@@ -504,7 +505,10 @@ export default function EventDetailPage() {
     }
     try {
       setGeneratingDoc({ id: reg.id, type: 'report-view' });
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { ReportCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       const fullReg = {
         ...reg,
         event: {
@@ -532,7 +536,10 @@ export default function EventDetailPage() {
   const handleDownloadReportCard = async (reg: any) => {
     try {
       setGeneratingDoc({ id: reg.id, type: 'report-print' });
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { ReportCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       const fullReg = {
         ...reg,
         event: {
@@ -575,9 +582,13 @@ export default function EventDetailPage() {
     try {
       setGeneratingDoc({ id: reg.id, type: 'id-view' });
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const qrCodeDataUrl = await generateLogoQrCode(reg.registrationCode, 250);
+      const scanUrl = `${window.location.origin}/r/${reg.qrToken || reg.registrationCode}`;
+      const qrCodeDataUrl = await generateLogoQrCode(scanUrl, 250);
 
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { IdCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/IdCardPdf'),
+      ]);
       const fullReg = {
         ...reg,
         event: {
@@ -586,10 +597,10 @@ export default function EventDetailPage() {
         }
       };
       const doc = (
-        <IdCardPdf 
-          registration={fullReg} 
-          backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={qrCodeDataUrl} 
+        <IdCardPdf
+          registration={fullReg}
+          backgroundImage={idBgImageBase64}
+          qrCodeDataUrl={qrCodeDataUrl}
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -612,9 +623,13 @@ export default function EventDetailPage() {
     try {
       setGeneratingDoc({ id: reg.id, type: 'id-print' });
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const qrCodeDataUrl = await generateLogoQrCode(reg.registrationCode, 250);
+      const scanUrl = `${window.location.origin}/r/${reg.qrToken || reg.registrationCode}`;
+      const qrCodeDataUrl = await generateLogoQrCode(scanUrl, 250);
 
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { IdCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/IdCardPdf'),
+      ]);
       const fullReg = {
         ...reg,
         event: {
@@ -623,10 +638,10 @@ export default function EventDetailPage() {
         }
       };
       const doc = (
-        <IdCardPdf 
-          registration={fullReg} 
-          backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={qrCodeDataUrl} 
+        <IdCardPdf
+          registration={fullReg}
+          backgroundImage={idBgImageBase64}
+          qrCodeDataUrl={qrCodeDataUrl}
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -1901,8 +1916,8 @@ export default function EventDetailPage() {
               
               <div>
                 <h3 className="text-base font-bold text-slate-800">{selectedRegForQr.student.name}</h3>
-                <p className="text-xs font-mono font-bold text-violet-600 mt-0.5">{selectedRegForQr.student.rollNumber}</p>
-                <p className="text-[11px] text-slate-400 mt-1">Grade {selectedRegForQr.student.grade} {selectedRegForQr.student.parentName && `• Parent: ${selectedRegForQr.student.parentName}`}</p>
+                <p className="text-xs font-mono font-bold text-violet-600 mt-0.5">****{selectedRegForQr.student.rollNumber.slice(-4)}</p>
+                <p className="text-[11px] text-slate-400 mt-1">Grade {selectedRegForQr.student.grade}</p>
               </div>
 
               {/* QR Code Container */}
@@ -1924,7 +1939,7 @@ export default function EventDetailPage() {
               <div className="w-full bg-slate-50 border border-slate-200/60 rounded-lg p-3 text-left space-y-1.5">
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Scan Destination URL</span>
                 <span className="text-[10px] font-mono text-slate-600 truncate block bg-white px-2 py-1 rounded border border-slate-100 select-all">
-                  {`${window.location.origin}/scan/${selectedRegForQr.registrationCode}`}
+                  {`${window.location.origin}/r/${selectedRegForQr.qrToken || selectedRegForQr.registrationCode}`}
                 </span>
                 <span className="text-[9px] text-slate-400 block italic leading-normal">
                   Allows parents to view the report card, and volunteers to scan & score the student.

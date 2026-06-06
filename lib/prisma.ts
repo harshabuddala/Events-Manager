@@ -10,20 +10,18 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient() {
   const pool = globalForPrisma.pgPool ?? new Pool({
     connectionString: process.env.DATABASE_URL!,
-    // Production pool settings
-    max: 10,                    // Maximum connections in pool
-    idleTimeoutMillis: 30000,   // Close idle connections after 30s
-    connectionTimeoutMillis: 5000, // Fail if can't connect in 5s
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
   })
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (!globalForPrisma.pgPool) {
     globalForPrisma.pgPool = pool
   }
 
   const adapter = new PrismaPg(pool)
   return new PrismaClient({
     adapter,
-    // Log errors in production for debugging
     log: process.env.NODE_ENV === 'production'
       ? [{ level: 'error', emit: 'event' }]
       : [],
@@ -32,6 +30,6 @@ function createPrismaClient() {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient()
 
-if (process.env.NODE_ENV !== 'production') {
+if (!globalForPrisma.prisma) {
   globalForPrisma.prisma = prisma
 }

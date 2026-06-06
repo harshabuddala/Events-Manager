@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { publicRegRateLimiter } from '@/lib/rate-limiter'
+import { readJsonBody } from '@/lib/request'
+import { generateQrToken } from '@/lib/utils'
 import { z } from 'zod'
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  return forwarded?.split(',')[0]?.trim() || '127.0.0.1'
+}
 
 const publicRegSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   grade: z.string().min(1, 'Class/Grade is required').max(20),
   age: z.union([z.coerce.number().int().min(1).max(100), z.literal('')]).optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phoneNumber: z.string().default('').refine(val => val.trim().length > 0, 'Parent phone number is required'),
-  parentName: z.string().default('').refine(val => val.trim().length > 0, 'Parent/guardian name is required'),
+  phoneNumber: z.string().min(1, 'Parent phone number is required').max(30),
+  parentName: z.string().min(1, 'Parent/guardian name is required').max(200),
 })
 
 // Derive short community code from name
@@ -76,6 +84,16 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const clientIp = getClientIp(request)
+  try {
+    await publicRegRateLimiter.consume(`public-reg:${clientIp}`)
+  } catch {
+    return NextResponse.json(
+      { error: 'Too many registration attempts from your IP. Please try again later.' },
+      { status: 429 }
+    )
+  }
+
   try {
     const { id: eventId } = await params
 
@@ -95,13 +113,11 @@ export async function POST(
       return NextResponse.json({ error: 'Public registration for this event is currently disabled' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const result = publicRegSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, publicRegSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const { name, grade, age, email, phoneNumber, parentName } = result.data
+    const { name, grade, age, email, phoneNumber, parentName } = result
 
     const communityCode = getCommunityCode(event.community.name)
     const prefix = `EDU-${communityCode}`
@@ -157,10 +173,12 @@ export async function POST(
     }
 
     const regCode = `REG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    const qrToken = generateQrToken()
 
     const registration = await prisma.registration.create({
       data: {
         registrationCode: regCode,
+        qrToken,
         eventId,
         studentId: student.id,
         status: 'REGISTERED',

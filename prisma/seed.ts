@@ -5,6 +5,11 @@ import { hash } from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { Pool } from 'pg'
 
+// Inline so seed.ts is self-contained (Docker container path resolution)
+function generateQrToken(): string {
+  return randomBytes(4).toString('hex').toUpperCase()
+}
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
@@ -417,6 +422,7 @@ async function main() {
   const registrationData = [
     {
       registrationCode: 'REG-8451',
+      qrToken: generateQrToken(),
       eventId: events[0].id,
       studentId: students[0].id,
       status: 'COMPLETED' as const,
@@ -424,12 +430,14 @@ async function main() {
     },
     {
       registrationCode: 'REG-8452',
+      qrToken: generateQrToken(),
       eventId: events[0].id,
       studentId: students[1].id,
       status: 'IN_PROGRESS' as const,
     },
     {
       registrationCode: 'REG-8453',
+      qrToken: generateQrToken(),
       eventId: events[1].id,
       studentId: students[2].id,
       status: 'COMPLETED' as const,
@@ -437,12 +445,14 @@ async function main() {
     },
     {
       registrationCode: 'REG-8454',
+      qrToken: generateQrToken(),
       eventId: events[2].id,
       studentId: students[3].id,
       status: 'REGISTERED' as const,
     },
     {
       registrationCode: 'REG-8455',
+      qrToken: generateQrToken(),
       eventId: events[3].id,
       studentId: students[4].id,
       status: 'COMPLETED' as const,

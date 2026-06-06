@@ -64,8 +64,8 @@ function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/communities').then(r => r.ok ? r.json() : Promise.reject()),
-      fetch('/api/dashboard').then(r => r.ok ? r.json() : Promise.reject()),
+      fetch('/api/communities', { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject()),
+      fetch('/api/dashboard', { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject()),
     ])
       .then(([communityData, dashboardData]) => {
         const list = communityData.communities || communityData || [];

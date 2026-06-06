@@ -41,12 +41,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const isStaff = session.role === 'ADMIN' || session.role === 'MANAGER'
+
+    // PII fields (parent name, parent phone, student email, student age)
+    // are only returned to ADMIN/MANAGER. Volunteers get a redacted shape.
+    const studentSelect = isStaff
+      ? { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true }
+      : { id: true, rollNumber: true, name: true, grade: true }
+
     const registrations = await prisma.registration.findMany({
       where,
       include: {
-        student: {
-          select: { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true }
-        },
+        student: { select: studentSelect },
         event: {
           select: {
             id: true,

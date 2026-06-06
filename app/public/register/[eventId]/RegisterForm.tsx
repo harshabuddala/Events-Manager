@@ -18,6 +18,7 @@ interface EventInfo {
 interface Registration {
   id: string
   registrationCode: string
+  qrToken?: string | null
   student: {
     rollNumber: string
     name: string
@@ -57,7 +58,8 @@ export default function RegisterForm({ event }: { event: EventInfo }) {
     }
     const generateQr = async () => {
       try {
-        const dataUrl = await generateLogoQrCode(registration.registrationCode, 300)
+        const scanUrl = `${window.location.origin}/r/${registration.qrToken || registration.registrationCode}`
+        const dataUrl = await generateLogoQrCode(scanUrl, 300)
         setQrCodeUrl(dataUrl)
       } catch (err) {
         console.error('Failed to generate QR code:', err)

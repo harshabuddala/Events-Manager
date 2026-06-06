@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { z } from 'zod'
 
 const postSchema = z.object({
@@ -19,13 +20,11 @@ export async function POST(
     }
 
     const { id } = await params
-    const body = await request.json()
-    const result = postSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, postSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const { volunteerId, stallId } = result.data
+    const { volunteerId, stallId } = result
 
     const existing = await prisma.volunteerAssignment.findFirst({
       where: { eventId: id, volunteerId, stallId },
@@ -69,9 +68,27 @@ export async function DELETE(
       return NextResponse.json({ error: 'Assignment ID is required' }, { status: 400 })
     }
 
+    const existing = await prisma.volunteerAssignment.findUnique({
+      where: { id: assignmentId },
+      select: { volunteerId: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 })
+    }
+
     await prisma.volunteerAssignment.delete({
       where: { id: assignmentId },
     })
+
+    const remainingAssignments = await prisma.volunteerAssignment.count({
+      where: { volunteerId: existing.volunteerId },
+    })
+    if (remainingAssignments === 0) {
+      await prisma.volunteer.update({
+        where: { id: existing.volunteerId },
+        data: { status: 'AVAILABLE' },
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

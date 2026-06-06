@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { z } from 'zod'
 
 const postSchema = z.object({
@@ -18,14 +19,12 @@ export async function POST(
     }
 
     const { id } = await params
-    const body = await request.json()
-    const result = postSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, postSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
     const stall = await prisma.stall.update({
-      where: { id: result.data.stallId },
+      where: { id: result.stallId },
       data: { events: { connect: { id } } },
     })
 

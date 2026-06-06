@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, createToken } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { randomBytes } from 'crypto'
+import { z } from 'zod'
+
+const qrTokenSchema = z.object({
+  targetUserId: z.string().optional(),
+  targetUserType: z.enum(['user', 'volunteer']).optional(),
+}).optional()
+
+const consumeSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+})
 
 /**
  * POST /api/auth/qr-login
@@ -17,7 +28,11 @@ export async function POST(request: NextRequest) {
 
     const bodyText = await request.text()
     const body = bodyText ? JSON.parse(bodyText) : {}
-    const { targetUserId, targetUserType } = body
+    const parsed = qrTokenSchema.safeParse(body)
+    if (!parsed.success || !parsed.data) {
+      return NextResponse.json({ error: parsed.error?.issues[0]?.message || 'Invalid body' }, { status: 400 })
+    }
+    const { targetUserId, targetUserType } = parsed.data
 
     const token = randomBytes(32).toString('hex')
 
@@ -125,12 +140,9 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { token } = body
-
-    if (!token) {
-      return NextResponse.json({ error: 'Token required' }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, consumeSchema)
+    if (!parsed.ok) return parsed.response
+    const { token } = parsed.data
 
     const result = await prisma.authToken.updateMany({
       where: {

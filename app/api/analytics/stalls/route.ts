@@ -12,7 +12,12 @@ export async function GET() {
     const stalls = await prisma.stall.findMany({
       include: {
         _count: { select: { stallVisits: true } },
-        stallVisits: { select: { completedAt: true } },
+        stallVisits: {
+          select: {
+            completedAt: true,
+            performance: { select: { score: true } },
+          },
+        },
       },
     })
 
@@ -24,16 +29,12 @@ export async function GET() {
       fill: colors[idx % colors.length],
     })).sort((a, b) => b.visits - a.visits)
 
-    const stallsWithPerf = await prisma.stall.findMany({
-      include: {
-        stallVisits: { include: { performance: true } },
-      },
-    })
-
-    const stallEngagement = stallsWithPerf.map(s => {
+    const stallEngagement = stalls.map(s => {
       const totalVisits = s.stallVisits.length
       const completed = s.stallVisits.filter(v => v.completedAt != null).length
-      const scores = s.stallVisits.map(v => v.performance?.score).filter((score): score is number => score != null)
+      const scores = s.stallVisits
+        .map(v => v.performance?.score)
+        .filter((score): score is number => score != null)
       const avgScore = scores.length > 0
         ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
         : 0

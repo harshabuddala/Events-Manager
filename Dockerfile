@@ -79,16 +79,17 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 RUN mkdir -p /app/uploads && chown -R nextjs:nodejs /app/uploads
 
 # Copy generated Prisma client (custom output path in schema)
-COPY --from=builder /app/generated/prisma ./generated/prisma
+# Must be writable by nextjs so runtime `prisma generate` can refresh it
+COPY --from=builder --chown=nextjs:nodejs /app/generated/prisma ./generated/prisma
 
 # Copy full node_modules (needed for Prisma CLI migrations + seed)
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copy prisma schema + seed (needed at runtime for migrations)
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 # Copy prisma config (needed for Prisma 7.x datasource URL)
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/entrypoint.sh ./entrypoint.sh
@@ -102,7 +103,7 @@ ENV PORT=8472
 ENV HOSTNAME="0.0.0.0"
 
 # Health check hits the /api/health endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
   CMD curl -f http://localhost:8472/api/health || exit 1
 
 ENTRYPOINT ["./entrypoint.sh"]

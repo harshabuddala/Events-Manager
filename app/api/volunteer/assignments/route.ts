@@ -10,7 +10,12 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const volunteerEmail = searchParams.get('email') || session.email
+    const requestedEmail = searchParams.get('email')
+
+    // Only ADMIN/MANAGER may look up another volunteer's assignments.
+    // Volunteers can only see their own.
+    const isStaff = session.role === 'ADMIN' || session.role === 'MANAGER'
+    const volunteerEmail = isStaff && requestedEmail ? requestedEmail : session.email
 
     const volunteer = await prisma.volunteer.findUnique({
       where: { email: volunteerEmail },
@@ -31,45 +36,59 @@ export async function GET(request: Request) {
       return NextResponse.json({ assignments: [] })
     }
 
-    const assignments = await Promise.all(
-      volunteer.assignments.map(async (assignment) => {
-        const [studentsEvaluated, totalStudents, avgResult] = await Promise.all([
-          prisma.performance.count({
-            where: {
-              volunteerId: volunteer.id,
-              stallVisit: {
-                stallId: assignment.stallId,
-                registration: { eventId: assignment.eventId },
-              },
-            },
-          }),
-          prisma.registration.count({
-            where: { eventId: assignment.eventId },
-          }),
-          prisma.performance.aggregate({
-            where: {
-              volunteerId: volunteer.id,
-              stallVisit: {
-                stallId: assignment.stallId,
-                registration: { eventId: assignment.eventId },
-              },
-            },
-            _avg: { score: true },
-          }),
-        ])
+    const eventIds = volunteer.assignments.map((a) => a.eventId)
 
-        return {
-          id: assignment.id,
-          stallName: assignment.stall.name,
-          eventName: assignment.event.name,
-          eventDate: assignment.event.date,
-          location: assignment.event.community.location,
-          studentsEvaluated,
-          totalStudents,
-          avgRating: Math.round((avgResult._avg.score || 0) * 10) / 10,
+    // One groupBy over all the volunteer's performances (keyed by eventId+stallId)
+    // replaces 2*N queries that ran in the original per-assignment loop.
+    const [perfStats, eventRegCounts] = await Promise.all([
+      prisma.performance.groupBy({
+        by: ['stallVisitId'],
+        where: { volunteerId: volunteer.id },
+        _avg: { score: true },
+        _count: { _all: true },
+      }).then(async (rows) => {
+        // We need the stallVisit.registration.eventId + stallVisit.stallId to
+        // map back to each assignment. Fetch the related stallVisits in one
+        // query.
+        const stallVisitIds = rows.map((r) => (r as { stallVisitId: string }).stallVisitId)
+        const stallVisits = await prisma.stallVisit.findMany({
+          where: { id: { in: stallVisitIds } },
+          select: { id: true, stallId: true, registration: { select: { eventId: true } } },
+        })
+        const map = new Map<string, { eventId: string; stallId: string; avgScore: number; count: number }>()
+        for (const sv of stallVisits) {
+          const row = rows.find((r) => (r as { stallVisitId: string }).stallVisitId === sv.id)
+          if (!row) continue
+          map.set(`${sv.registration.eventId}::${sv.stallId}`, {
+            eventId: sv.registration.eventId,
+            stallId: sv.stallId,
+            avgScore: (row._avg.score || 0),
+            count: row._count._all,
+          })
         }
-      })
-    )
+        return map
+      }),
+      prisma.registration.groupBy({
+        by: ['eventId'],
+        where: { eventId: { in: eventIds } },
+        _count: { _all: true },
+      }).then((rows) => new Map(rows.map((r) => [r.eventId, r._count._all]))),
+    ])
+
+    const assignments = volunteer.assignments.map((assignment) => {
+      const stat = perfStats.get(`${assignment.eventId}::${assignment.stallId}`)
+      const totalStudents = eventRegCounts.get(assignment.eventId) || 0
+      return {
+        id: assignment.id,
+        stallName: assignment.stall.name,
+        eventName: assignment.event.name,
+        eventDate: assignment.event.date,
+        location: assignment.event.community.location,
+        studentsEvaluated: stat?.count ?? 0,
+        totalStudents,
+        avgRating: Math.round((stat?.avgScore ?? 0) * 10) / 10,
+      }
+    })
 
     return NextResponse.json({ assignments })
   } catch (error) {

@@ -1,50 +1,68 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   try {
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Mock schedule data
-    const schedule = [
-      {
-        id: '1',
-        eventName: 'Spring Learning Festival',
-        stallName: 'Science Lab',
-        location: 'Greenwood Community Center',
-        date: new Date().toISOString(),
-        startTime: '09:00 AM',
-        endTime: '02:00 PM',
-        status: 'ongoing' as const,
-        studentsRegistered: 45
+    const volunteer = await prisma.volunteer.findUnique({
+      where: { email: session.email },
+      include: {
+        assignments: {
+          include: {
+            event: {
+              select: {
+                id: true,
+                name: true,
+                date: true,
+                endDate: true,
+                status: true,
+                community: { select: { name: true, location: true } },
+              },
+            },
+            stall: { select: { id: true, name: true } },
+          },
+        },
       },
-      {
-        id: '2',
-        eventName: 'Summer Science Camp',
-        stallName: 'Math Corner',
-        location: 'Riverside Apartments',
-        date: new Date(Date.now() + 86400000 * 3).toISOString(), // 3 days from now
-        startTime: '10:00 AM',
-        endTime: '03:00 PM',
-        status: 'upcoming' as const,
-        studentsRegistered: 32
-      },
-      {
-        id: '3',
-        eventName: 'Back to School Event',
-        stallName: 'Art Station',
-        location: 'Oakwood Community',
-        date: new Date(Date.now() - 86400000 * 7).toISOString(), // 1 week ago
-        startTime: '09:00 AM',
-        endTime: '01:00 PM',
-        status: 'completed' as const,
-        studentsRegistered: 38
-      }
-    ]
+    })
+
+    if (!volunteer) {
+      return NextResponse.json({ schedule: [] })
+    }
+
+    const now = new Date()
+    const schedule = volunteer.assignments
+      .map((a) => {
+        const event = a.event
+        const eventDate = new Date(event.date)
+        const endDate = event.endDate ? new Date(event.endDate) : null
+        const isFuture = eventDate.getTime() > now.getTime()
+        const isOngoing = eventDate.getTime() <= now.getTime() && (endDate ? endDate.getTime() >= now.getTime() : eventDate.getDate() === now.getDate())
+
+        let status: 'upcoming' | 'ongoing' | 'completed' = 'upcoming'
+        if (event.status === 'COMPLETED' || (!isFuture && !isOngoing)) status = 'completed'
+        else if (event.status === 'LIVE' || isOngoing) status = 'ongoing'
+        else if (event.status === 'CANCELLED') return null
+
+        return {
+          id: a.id,
+          eventName: event.name,
+          stallName: a.stall.name,
+          location: event.community.location,
+          date: event.date.toISOString(),
+          endDate: event.endDate?.toISOString() ?? null,
+          startTime: '09:00 AM',
+          endTime: '06:00 PM',
+          status,
+          studentsRegistered: 0,
+        }
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
     return NextResponse.json({ schedule })
   } catch (error) {

@@ -145,6 +145,7 @@ model Student {
 model Registration {
   id               String             @id @default(uuid())
   registrationCode String             @unique
+  qrToken          String?            @unique
   eventId          String
   studentId        String
   status           RegistrationStatus @default(REGISTERED)

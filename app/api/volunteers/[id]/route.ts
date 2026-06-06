@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 
@@ -51,11 +52,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const result = updateSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, updateSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
     // Check if volunteer exists
     const existing = await prisma.volunteer.findUnique({
@@ -67,9 +66,9 @@ export async function PUT(
     }
 
     // Check email uniqueness if email is being updated
-    if (result.data.email && result.data.email !== existing.email) {
+    if (result.email && result.email !== existing.email) {
       const emailExists = await prisma.volunteer.findUnique({
-        where: { email: result.data.email },
+        where: { email: result.email },
       })
       if (emailExists) {
         return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
@@ -78,21 +77,21 @@ export async function PUT(
 
     // Hash password if provided
     let hashedPassword: string | undefined
-    if (result.data.password) {
-      hashedPassword = await hash(result.data.password, 12)
+    if (result.password) {
+      hashedPassword = await hash(result.password, 12)
     }
 
     // Update volunteer
     const volunteer = await prisma.volunteer.update({
       where: { id: params.id },
       data: {
-        ...(result.data.name && { name: result.data.name }),
-        ...(result.data.email && { email: result.data.email }),
+        ...(result.name && { name: result.name }),
+        ...(result.email && { email: result.email }),
         ...(hashedPassword && { password: hashedPassword }),
-        ...(result.data.phoneNumber !== undefined && { phoneNumber: result.data.phoneNumber || null }),
-        ...(result.data.role && { role: result.data.role }),
-        ...(result.data.status && { status: result.data.status }),
-        ...(result.data.preferredStall !== undefined && { preferredStall: result.data.preferredStall || null }),
+        ...(result.phoneNumber !== undefined && { phoneNumber: result.phoneNumber || null }),
+        ...(result.role && { role: result.role }),
+        ...(result.status && { status: result.status }),
+        ...(result.preferredStall !== undefined && { preferredStall: result.preferredStall || null }),
       },
     })
 

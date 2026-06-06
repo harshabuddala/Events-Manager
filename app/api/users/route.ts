@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 
@@ -55,14 +56,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const result = createUserSchema.safeParse(body)
+    const parsed = await readJsonBody(request, createUserSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
-
-    const { email, password, name, role, phoneNumber } = result.data
+    const { email, password, name, role, phoneNumber } = result
 
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) {

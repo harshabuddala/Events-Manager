@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { z } from 'zod'
 
 const communityStatusEnum = z.enum(['ACTIVE', 'UPCOMING', 'INACTIVE'])
@@ -71,19 +72,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const result = createSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, createSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const existing = await prisma.community.findUnique({ where: { code: result.data.code } })
+    const existing = await prisma.community.findUnique({ where: { code: result.code } })
     if (existing) {
       return NextResponse.json({ error: 'Community code already exists' }, { status: 409 })
     }
 
     const community = await prisma.community.create({
-      data: result.data,
+      data: result,
     })
 
     return NextResponse.json({ community }, { status: 201 })

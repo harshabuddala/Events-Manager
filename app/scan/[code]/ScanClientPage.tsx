@@ -9,10 +9,11 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf'
-import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf'
+import { fetchReportCardImageBase64 } from '@/lib/letterheads'
+import { fetchIdCardImageBase64 } from '@/lib/letterheads'
 
-// We will load @react-pdf/renderer dynamically inside our dynamic PDF generation handlers to prevent SSR issues.
+// ReportCardPdf and IdCardPdf are loaded dynamically inside the PDF generation
+// handlers to keep @react-pdf/renderer out of the initial client bundle.
 
 interface ScanClientPageProps {
   initialRegistration: any
@@ -44,6 +45,23 @@ export default function ScanClientPage({
     fetchIdCardImageBase64().then((base64) => {
       setIdBgImageBase64(base64)
     }).catch(console.error)
+
+    // Hide the persistent registration code from the address bar so it
+    // doesn't get captured by OCR (e.g. Google Lens) or end up in browser
+    // history. The QR encodes /r/<code>; after the redirect resolves to
+    // /scan/<code>, rewrite the URL to a clean path. Skip when the page
+    // is embedded (e.g. in an iframe) so we don't break the parent.
+    if (!isEmbed && typeof window !== 'undefined' && window.history?.replaceState) {
+      try {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          '/scan',
+        )
+      } catch {
+        // Some browsers throw on cross-origin replaceState; safe to ignore.
+      }
+    }
   }, [])
 
 
@@ -57,7 +75,10 @@ export default function ScanClientPage({
     }
     try {
       setGeneratingDoc('report-view');
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { ReportCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       const doc = <ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
@@ -79,7 +100,10 @@ export default function ScanClientPage({
     if (!registration) return;
     try {
       setGeneratingDoc('report-print');
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { ReportCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       const doc = <ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
@@ -116,14 +140,18 @@ export default function ScanClientPage({
     try {
       setGeneratingDoc('id-view');
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const qrCodeDataUrl = await generateLogoQrCode(registration.registrationCode, 250);
+      const scanUrl = `${window.location.origin}/r/${registration.qrToken || registration.registrationCode}`;
+      const qrCodeDataUrl = await generateLogoQrCode(scanUrl, 250);
 
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { IdCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/IdCardPdf'),
+      ]);
       const doc = (
-        <IdCardPdf 
-          registration={registration} 
-          backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={qrCodeDataUrl} 
+        <IdCardPdf
+          registration={registration}
+          backgroundImage={idBgImageBase64}
+          qrCodeDataUrl={qrCodeDataUrl}
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -147,14 +175,18 @@ export default function ScanClientPage({
     try {
       setGeneratingDoc('id-print');
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const qrCodeDataUrl = await generateLogoQrCode(registration.registrationCode, 250);
+      const scanUrl = `${window.location.origin}/r/${registration.qrToken || registration.registrationCode}`;
+      const qrCodeDataUrl = await generateLogoQrCode(scanUrl, 250);
 
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { IdCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/IdCardPdf'),
+      ]);
       const doc = (
-        <IdCardPdf 
-          registration={registration} 
-          backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={qrCodeDataUrl} 
+        <IdCardPdf
+          registration={registration}
+          backgroundImage={idBgImageBase64}
+          qrCodeDataUrl={qrCodeDataUrl}
         />
       );
       const blob = await pdf(doc).toBlob();

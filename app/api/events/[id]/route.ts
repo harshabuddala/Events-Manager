@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { z } from 'zod'
 
 const updateSchema = z.object({
@@ -63,13 +64,11 @@ export async function PUT(
     }
 
     const { id } = await params
-    const body = await request.json()
-    const result = updateSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, updateSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const data: any = { ...result.data }
+    const data: any = { ...result }
     if (data.endDate === '') data.endDate = null
     if (data.date) data.date = new Date(data.date)
     if (data.endDate) data.endDate = new Date(data.endDate)

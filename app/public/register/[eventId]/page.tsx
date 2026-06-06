@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import RegisterForm from './RegisterForm'
 import './public-register.css'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface PageProps {
   params: Promise<{ eventId: string }>
 }

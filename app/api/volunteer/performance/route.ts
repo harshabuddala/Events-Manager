@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 
@@ -11,40 +11,79 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const range = searchParams.get('range') || 'week'
+    const days = range === 'month' ? 30 : range === 'all' ? 365 : 7
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
-    // Generate mock performance data based on range
-    const multiplier = range === 'month' ? 4 : range === 'all' ? 12 : 1
+    const volunteer = await prisma.volunteer.findUnique({
+      where: { email: session.email },
+      select: { id: true },
+    })
+    if (!volunteer) {
+      return NextResponse.json({
+        performance: {
+          totalEvaluations: 0,
+          avgRating: 0,
+          totalHours: 0,
+          studentsPerHour: 0,
+          ratingTrend: [],
+          skillDistribution: { participation: 0, creativity: 0, problemSolving: 0, communication: 0, learningAbility: 0 },
+          recentRatings: [],
+        },
+      })
+    }
+
+    const [totalEvaluations, avgAgg, recentPerf] = await Promise.all([
+      prisma.performance.count({ where: { volunteerId: volunteer.id } }),
+      prisma.performance.aggregate({
+        where: { volunteerId: volunteer.id },
+        _avg: { score: true, participation: true, creativity: true, problemSolving: true, communication: true, learningAbility: true },
+      }),
+      prisma.performance.findMany({
+        where: { volunteerId: volunteer.id, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: {
+          stallVisit: {
+            include: {
+              student: { select: { name: true } },
+            },
+          },
+        },
+      }),
+    ])
+
+    const recentRatings = recentPerf.slice(0, 10).map((p) => ({
+      date: p.createdAt.toISOString(),
+      rating: p.score,
+      studentName: p.stallVisit?.student?.name ?? 'Unknown',
+    }))
+
+    const todayEvaluations = await prisma.performance.count({
+      where: {
+        volunteerId: volunteer.id,
+        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      },
+    })
+
+    const ratingTrend = recentPerf
+      .slice(0, 7)
+      .reverse()
+      .map((p) => p.score)
 
     const performance = {
-      totalEvaluations: Math.floor(Math.random() * 50 * multiplier) + 20,
-      avgRating: Math.random() * 1.5 + 3.5, // Rating between 3.5-5
-      totalHours: Math.floor(Math.random() * 20 * multiplier) + 10,
-      studentsPerHour: Math.random() * 3 + 2, // Students per hour
-      ratingTrend: Array.from({ length: 7 }, () => Math.random() * 2 + 3),
+      totalEvaluations,
+      avgRating: Math.round((avgAgg._avg.score ?? 0) * 10) / 10,
+      totalHours: Math.max(1, Math.round(todayEvaluations / 3)),
+      studentsPerHour: todayEvaluations > 0 ? Math.round((todayEvaluations / 8) * 10) / 10 : 0,
+      ratingTrend,
       skillDistribution: {
-        participation: Math.random() * 3 + 7,
-        creativity: Math.random() * 3 + 6,
-        problemSolving: Math.random() * 3 + 7,
-        communication: Math.random() * 3 + 6,
-        learningAbility: Math.random() * 3 + 7
+        participation: Math.round((avgAgg._avg.participation ?? 0) * 10) / 10,
+        creativity: Math.round((avgAgg._avg.creativity ?? 0) * 10) / 10,
+        problemSolving: Math.round((avgAgg._avg.problemSolving ?? 0) * 10) / 10,
+        communication: Math.round((avgAgg._avg.communication ?? 0) * 10) / 10,
+        learningAbility: Math.round((avgAgg._avg.learningAbility ?? 0) * 10) / 10,
       },
-      recentRatings: [
-        {
-          date: new Date().toISOString(),
-          rating: Math.random() * 2 + 3,
-          studentName: 'Aarav Sharma'
-        },
-        {
-          date: new Date(Date.now() - 3600000).toISOString(),
-          rating: Math.random() * 2 + 3,
-          studentName: 'Diya Patel'
-        },
-        {
-          date: new Date(Date.now() - 7200000).toISOString(),
-          rating: Math.random() * 2 + 3,
-          studentName: 'Rahul Kumar'
-        }
-      ]
+      recentRatings,
     }
 
     return NextResponse.json({ performance })

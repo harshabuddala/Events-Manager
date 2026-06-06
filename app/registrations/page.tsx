@@ -8,13 +8,15 @@ import {
   CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye, IdCard,
   Star, Pencil, Award, ShoppingBag, Send, AlertCircle
 } from 'lucide-react';
-import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
-import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf';
-// We will load @react-pdf/renderer dynamically inside our dynamic PDF generation handlers to prevent SSR issues.
+import { fetchReportCardImageBase64 } from '@/lib/letterheads';
+import { fetchIdCardImageBase64 } from '@/lib/letterheads';
+// ReportCardPdf and IdCardPdf are loaded dynamically inside the PDF generation
+// handlers to keep @react-pdf/renderer out of the initial client bundle.
 
 interface Registration {
   id: string;
   registrationCode: string;
+  qrToken?: string | null;
   status: string;
   registeredAt: string;
   student: {
@@ -127,7 +129,10 @@ export default function RegistrationsPage() {
     }
     try {
       setGeneratingDoc({ id: reg.id, type: 'report-view' });
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { ReportCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       const doc = <ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
@@ -148,7 +153,10 @@ export default function RegistrationsPage() {
   const handleDownloadReportCard = async (reg: Registration) => {
     try {
       setGeneratingDoc({ id: reg.id, type: 'report-print' });
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { ReportCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       const doc = <ReportCardPdf registration={reg} backgroundImage={bgImageBase64} />;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
@@ -184,14 +192,18 @@ export default function RegistrationsPage() {
     try {
       setGeneratingDoc({ id: reg.id, type: 'id-view' });
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const qrCodeDataUrl = await generateLogoQrCode(reg.registrationCode, 250);
+      const scanUrl = `${window.location.origin}/r/${reg.qrToken || reg.registrationCode}`;
+      const qrCodeDataUrl = await generateLogoQrCode(scanUrl, 250);
 
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { IdCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/IdCardPdf'),
+      ]);
       const doc = (
-        <IdCardPdf 
-          registration={reg} 
-          backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={qrCodeDataUrl} 
+        <IdCardPdf
+          registration={reg}
+          backgroundImage={idBgImageBase64}
+          qrCodeDataUrl={qrCodeDataUrl}
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -214,14 +226,18 @@ export default function RegistrationsPage() {
     try {
       setGeneratingDoc({ id: reg.id, type: 'id-print' });
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const qrCodeDataUrl = await generateLogoQrCode(reg.registrationCode, 250);
+      const scanUrl = `${window.location.origin}/r/${reg.qrToken || reg.registrationCode}`;
+      const qrCodeDataUrl = await generateLogoQrCode(scanUrl, 250);
 
-      const { pdf } = await import('@react-pdf/renderer');
+      const [{ pdf }, { IdCardPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/IdCardPdf'),
+      ]);
       const doc = (
-        <IdCardPdf 
-          registration={reg} 
-          backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={qrCodeDataUrl} 
+        <IdCardPdf
+          registration={reg}
+          backgroundImage={idBgImageBase64}
+          qrCodeDataUrl={qrCodeDataUrl}
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -263,8 +279,10 @@ export default function RegistrationsPage() {
         a.student.name.localeCompare(b.student.name)
       );
 
-      const { pdf, Document } = await import('@react-pdf/renderer');
-      const { ReportCardPage } = await import('@/app/components/ReportCardPdf');
+      const [{ pdf, Document }, { ReportCardPage }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/app/components/ReportCardPdf'),
+      ]);
       
       const doc = (
         <Document>
@@ -326,7 +344,8 @@ export default function RegistrationsPage() {
   const showQr = async (code: string) => {
     try {
       const { generateLogoQrCode } = await import('@/lib/qr');
-      const dataUrl = await generateLogoQrCode(code, 200);
+      const scanUrl = `${window.location.origin}/r/${code}`;
+      const dataUrl = await generateLogoQrCode(scanUrl, 200);
       setQrModal({ code, dataUrl });
     } catch {
       alert('Failed to generate QR code');
@@ -490,7 +509,7 @@ export default function RegistrationsPage() {
                     <td className="px-5 py-4 text-right sticky right-0 bg-white z-10">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => showQr(reg.registrationCode)}
+                          onClick={() => showQr(reg.qrToken || reg.registrationCode)}
                           className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors"
                           title="Show QR Code"
                         >

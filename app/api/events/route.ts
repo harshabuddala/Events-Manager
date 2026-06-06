@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { z } from 'zod'
 
 const eventStatusEnum = z.enum(['UPCOMING', 'LIVE', 'COMPLETED', 'CANCELLED'])
@@ -31,6 +32,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const eventIds = (await prisma.event.findMany({ select: { id: true } })).map((e) => e.id)
+    const completedCounts = await prisma.registration.groupBy({
+      by: ['eventId'],
+      where: { eventId: { in: eventIds }, status: 'COMPLETED' },
+      _count: { _all: true },
+    })
+    const completedMap = new Map(completedCounts.map((c) => [c.eventId, c._count._all]))
+
     const events = await prisma.event.findMany({
       include: {
         community: { select: { name: true, location: true } },
@@ -42,7 +51,7 @@ export async function GET() {
 
     const result = events.map(e => {
       const totalRegs = e._count.registrations
-      const completedRegs = 0
+      const completedRegs = completedMap.get(e.id) ?? 0
       const completion = totalRegs > 0 ? Math.round((completedRegs / totalRegs) * 100) : 0
 
       return {
@@ -78,27 +87,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const result = createSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, createSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const existing = await prisma.event.findUnique({ where: { code: result.data.code } })
+    const existing = await prisma.event.findUnique({ where: { code: result.code } })
     if (existing) {
       return NextResponse.json({ error: 'Event code already exists' }, { status: 409 })
     }
 
     const event = await prisma.event.create({
       data: {
-        code: result.data.code,
-        name: result.data.name,
-        communityId: result.data.communityId,
-        date: result.data.date,
-        endDate: result.data.endDate || null,
-        description: result.data.description || null,
+        code: result.code,
+        name: result.name,
+        communityId: result.communityId,
+        date: result.date,
+        endDate: result.endDate || null,
+        description: result.description || null,
         organizerId: session.id,
-        status: result.data.status || 'UPCOMING',
+        status: result.status || 'UPCOMING',
       },
     })
 

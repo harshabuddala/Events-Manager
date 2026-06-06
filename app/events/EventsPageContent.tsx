@@ -40,7 +40,7 @@ export default function EventsPageContent() {
   const communityIdParam = searchParams.get('communityId');
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    fetch('/api/auth/me', { cache: 'no-store' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.user?.role) setUserRole(data.user.role);
@@ -69,7 +69,7 @@ export default function EventsPageContent() {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch('/api/events');
+      const res = await fetch('/api/events', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const mapped = data.events.map((e: any) => ({

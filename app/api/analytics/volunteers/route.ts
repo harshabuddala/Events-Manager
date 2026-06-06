@@ -43,11 +43,17 @@ export async function GET() {
 
     const workloadVsRating = volunteers
       .filter(v => v.rating != null)
-      .map(v => ({
-        name: v.name.split(' ')[0] + ' ' + v.name.split(' ')[1]?.charAt(0) + '.' || v.name,
-        workload: v.totalEvents,
-        rating: v.rating,
-      }))
+      .map(v => {
+        const parts = v.name.split(' ').filter(Boolean)
+        const first = parts[0] ?? v.name
+        const second = parts[1]?.charAt(0)
+        const shortName = second ? `${first} ${second}.` : first
+        return {
+          name: shortName,
+          workload: v.totalEvents,
+          rating: v.rating,
+        }
+      })
 
     return NextResponse.json({ ratingsDistribution, workloadVsRating })
   } catch (error) {

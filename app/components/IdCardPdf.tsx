@@ -1,44 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
-let cachedBase64Image: string | null = null;
-let imageFetchPromise: Promise<string> | null = null;
-
-export const fetchIdCardImageBase64 = async (): Promise<string> => {
-  if (typeof window === 'undefined') return '/id_card_design.png';
-  if (cachedBase64Image) return cachedBase64Image;
-  if (imageFetchPromise) return imageFetchPromise;
-  
-  imageFetchPromise = (async () => {
-    try {
-      const origin = window.location.origin;
-      const url = `${origin}/id_card_design.png`;
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-      }
-      
-      const blob = await response.blob();
-      
-      return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64data = reader.result as string;
-          cachedBase64Image = base64data;
-          resolve(base64data);
-        };
-        reader.onerror = (err) => reject(err);
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      // Fallback to absolute URL if fetch fails
-      return `${window.location.origin}/id_card_design.png`;
-    }
-  })();
-  
-  return imageFetchPromise;
-};
+export { fetchIdCardImageBase64 } from '@/lib/letterheads';
 
 const styles = StyleSheet.create({
   page: {

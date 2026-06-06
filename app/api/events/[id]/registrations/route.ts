@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
+import { generateQrToken } from '@/lib/utils'
 import { z } from 'zod'
 
 const quickRegSchema = z.object({
@@ -36,12 +38,23 @@ export async function GET(
       return NextResponse.json({ rollNumber: `${prefix}-${next}` })
     }
 
+    const isStaff = session.role === 'ADMIN' || session.role === 'MANAGER'
+    const studentSelect = isStaff
+      ? { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true }
+      : { id: true, rollNumber: true, name: true, grade: true }
+
     const registrations = await prisma.registration.findMany({
       where: { eventId: id },
-      include: {
-        student: {
-          select: { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true },
-        },
+      select: {
+        id: true,
+        registrationCode: true,
+        qrToken: true,
+        status: true,
+        registeredAt: true,
+        completedAt: true,
+        notes: true,
+        registeredBy: true,
+        student: { select: studentSelect },
         stallVisits: {
           include: {
             stall: { select: { id: true, name: true, metrics: true } },
@@ -121,13 +134,11 @@ export async function POST(
     }
 
     // Admins/Managers can always register
-    const body = await request.json()
-    const result = quickRegSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, quickRegSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const { rollNumber, name, grade, age, email, phoneNumber, parentName } = result.data
+    const { rollNumber, name, grade, age, email, phoneNumber, parentName } = result
 
     // Fetch the event to get the community name for prefix derivation
     const event = await prisma.event.findUnique({
@@ -200,12 +211,14 @@ export async function POST(
       return NextResponse.json({ error: `${name} is already registered for this event` }, { status: 409 })
     }
 
-    // Generate registration code
+    // Generate registration code and opaque QR token
     const regCode = `REG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    const qrToken = generateQrToken()
 
     const registration = await prisma.registration.create({
       data: {
         registrationCode: regCode,
+        qrToken,
         eventId,
         studentId: student.id,
         status: 'REGISTERED',
@@ -260,13 +273,11 @@ export async function PATCH(
         return NextResponse.json({ error: 'You are not assigned to this event' }, { status: 403 })
       }
     }
-    const body = await request.json()
-    const result = editStudentSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, editStudentSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const { studentId, name, grade, age, email, phoneNumber, parentName } = result.data
+    const { studentId, name, grade, age, email, phoneNumber, parentName } = result
 
     // Update student details
     const updatedStudent = await prisma.student.update({

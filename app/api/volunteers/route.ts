@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 
@@ -78,26 +79,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const result = createSchema.safeParse(body)
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
+    const parsed = await readJsonBody(request, createSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    const existing = await prisma.volunteer.findUnique({ where: { email: result.data.email } })
+    const existing = await prisma.volunteer.findUnique({ where: { email: result.email } })
     if (existing) {
       return NextResponse.json({ error: 'Volunteer email already exists' }, { status: 409 })
     }
 
-    const hashedPassword = await hash(result.data.password, 12)
+    const hashedPassword = await hash(result.password, 12)
 
     const volunteer = await prisma.volunteer.create({
       data: {
-        name: result.data.name,
-        email: result.data.email,
+        name: result.name,
+        email: result.email,
         password: hashedPassword,
-        phoneNumber: result.data.phoneNumber || null,
-        role: result.data.role || 'VOLUNTEER',
+        phoneNumber: result.phoneNumber || null,
+        role: result.role || 'VOLUNTEER',
         status: 'AVAILABLE',
       },
     })

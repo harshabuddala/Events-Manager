@@ -11,20 +11,13 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ['@prisma/client', 'prisma'],
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**',
-      },
-    ],
+    remotePatterns: [],
   },
   transpilePackages: ['motion', 'recharts'],
   async headers() {
     return [
       {
-        source: '/',
+        source: '/((?!api/health).*)',
         headers: [
           {
             key: 'Cache-Control',
@@ -72,3 +65,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+

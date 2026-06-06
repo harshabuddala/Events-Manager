@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 
@@ -9,39 +9,66 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get students who have visited stalls assigned to this volunteer
-    // For now, return mock data
-    const students = [
-      {
-        id: '1',
-        name: 'Aarav Sharma',
-        rollNumber: 'REG-2024-001',
-        grade: '5',
-        stallName: 'Science Lab',
-        visitTime: new Date().toISOString(),
-        status: 'pending' as const
+    const { searchParams } = new URL(request.url)
+    const stallId = searchParams.get('stallId')
+    const eventId = searchParams.get('eventId')
+
+    const volunteer = await prisma.volunteer.findUnique({
+      where: { email: session.email },
+      select: { id: true, assignments: { select: { stallId: true, eventId: true } } },
+    })
+    if (!volunteer) {
+      return NextResponse.json({ students: [] })
+    }
+
+    const allowedStallIds = Array.from(new Set(volunteer.assignments.map((a) => a.stallId)))
+    const allowedEventIds = Array.from(new Set(volunteer.assignments.map((a) => a.eventId)))
+
+    if (allowedStallIds.length === 0) {
+      return NextResponse.json({ students: [] })
+    }
+
+    const targetStallId = stallId && allowedStallIds.includes(stallId) ? stallId : allowedStallIds[0]
+    const targetEventId = eventId && allowedEventIds.includes(eventId) ? eventId : allowedEventIds[0]
+
+    const registrations = await prisma.registration.findMany({
+      where: {
+        eventId: targetEventId,
+        stallVisits: {
+          some: { stallId: targetStallId },
+        },
       },
-      {
-        id: '2',
-        name: 'Diya Patel',
-        rollNumber: 'REG-2024-002',
-        grade: '6',
-        stallName: 'Math Corner',
-        visitTime: new Date(Date.now() - 3600000).toISOString(),
-        status: 'completed' as const,
-        score: 8.5,
-        evaluationGrade: 'A'
+      include: {
+        student: {
+          select: { id: true, name: true, rollNumber: true, grade: true },
+        },
+        stallVisits: {
+          where: { stallId: targetStallId },
+          include: {
+            performance: { select: { score: true, grade: true, updatedAt: true } },
+          },
+        },
       },
-      {
-        id: '3',
-        name: 'Rahul Kumar',
-        rollNumber: 'REG-2024-003',
-        grade: '4',
-        stallName: 'Science Lab',
-        visitTime: new Date(Date.now() - 7200000).toISOString(),
-        status: 'pending' as const
+      orderBy: { registeredAt: 'desc' },
+      take: 50,
+    })
+
+    const students = registrations.map((reg) => {
+      const visit = reg.stallVisits[0]
+      const perf = visit?.performance
+      return {
+        id: reg.id,
+        registrationId: reg.id,
+        name: reg.student.name,
+        rollNumber: reg.student.rollNumber,
+        grade: reg.student.grade,
+        stallName: '',
+        visitTime: (visit?.visitedAt ?? reg.registeredAt).toISOString(),
+        status: perf ? 'completed' : 'pending',
+        score: perf?.score ?? null,
+        evaluationGrade: perf?.grade ?? null,
       }
-    ]
+    })
 
     return NextResponse.json({ students })
   } catch (error) {

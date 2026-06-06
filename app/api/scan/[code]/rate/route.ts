@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { readJsonBody } from '@/lib/request'
 import { z } from 'zod'
 
 const rateSchema = z.object({
@@ -9,6 +10,9 @@ const rateSchema = z.object({
   grade: z.string().min(1).max(10).optional(),
   metricScores: z.record(z.string(), z.number().int().min(1).max(5)).optional(),
   remarks: z.string().optional().or(z.literal('')),
+  // Required for ADMIN/MANAGER graders; ignored for volunteer graders
+  // (their own volunteer record is used).
+  volunteerId: z.string().min(1).optional(),
 })
 
 function deriveScoreAndGrade(
@@ -98,14 +102,11 @@ export async function POST(
     }
 
     const { code } = await params
-    const body = await request.json()
-    const result = rateSchema.safeParse(body)
+    const parsed = await readJsonBody(request, rateSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
-
-    const { stallId, remarks, metricScores, score, grade } = result.data
+    const { stallId, remarks, metricScores, score, grade, volunteerId } = result
 
     const registration = await prisma.registration.findUnique({
       where: { registrationCode: code },
@@ -114,6 +115,12 @@ export async function POST(
 
     if (!registration) {
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
+    }
+
+    // Verify the stall belongs to this event (prevents cross-event submission)
+    const stallBelongsToEvent = registration.event.stalls?.some((s) => s.id === stallId)
+    if (!stallBelongsToEvent) {
+      return NextResponse.json({ error: 'Stall is not part of this event' }, { status: 400 })
     }
 
     const resolved = await resolveEvaluationPayload(stallId, { score, grade, metricScores })
@@ -130,19 +137,37 @@ export async function POST(
         return NextResponse.json({ error: 'Volunteer record not found. Please contact administration.' }, { status: 403 })
       }
     } else {
-      const eventVolunteer = await prisma.volunteerAssignment.findFirst({
-        where: { eventId: registration.eventId },
-        include: { volunteer: true }
-      })
-
-      if (eventVolunteer) {
-        volunteer = eventVolunteer.volunteer
+      // ADMIN/MANAGER: prefer an explicit volunteerId from the request body.
+      // If not provided, look up the volunteer assigned to (event, stall).
+      // If multiple are assigned, the caller must disambiguate. This is
+      // safer than the previous "findFirst()" which silently attributed
+      // the score to an arbitrary volunteer.
+      if (volunteerId) {
+        volunteer = await prisma.volunteer.findUnique({ where: { id: volunteerId } })
+        if (!volunteer) {
+          return NextResponse.json({ error: 'Specified volunteer not found' }, { status: 404 })
+        }
       } else {
-        volunteer = await prisma.volunteer.findFirst()
-      }
-
-      if (!volunteer) {
-        return NextResponse.json({ error: 'No volunteers available in the system. Please create a volunteer first.' }, { status: 400 })
+        const assignments = await prisma.volunteerAssignment.findMany({
+          where: { eventId: registration.eventId, stallId },
+          include: { volunteer: { select: { id: true, name: true } } },
+        })
+        if (assignments.length === 0) {
+          return NextResponse.json(
+            { error: 'No volunteer is assigned to this stall for this event. Specify a volunteerId in the request or assign a volunteer first.' },
+            { status: 400 }
+          )
+        }
+        if (assignments.length > 1) {
+          return NextResponse.json(
+          {
+            error: 'Multiple volunteers are assigned to this stall. Specify a volunteerId in the request.',
+            candidates: assignments.map((a) => ({ id: a.volunteer.id, name: a.volunteer.name })),
+          },
+          { status: 409 }
+          )
+        }
+        volunteer = assignments[0].volunteer
       }
     }
 
@@ -242,14 +267,11 @@ export async function PATCH(
     }
 
     const { code } = await params
-    const body = await request.json()
-    const result = rateSchema.safeParse(body)
+    const parsed = await readJsonBody(request, rateSchema)
+    if (!parsed.ok) return parsed.response
+    const result = parsed.data
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
-    }
-
-    const { stallId, remarks, metricScores, score, grade } = result.data
+    const { stallId, remarks, metricScores, score, grade } = result
 
     const registration = await prisma.registration.findUnique({
       where: { registrationCode: code },

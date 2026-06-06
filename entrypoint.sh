@@ -27,6 +27,19 @@ echo "  → Database is ready!"
 
 # ─── Run Prisma Migrations ──────────────────────────────────────────────────
 echo "[2/5] Running database migrations..."
+
+# Regenerate Prisma client at runtime to guarantee schema/client alignment.
+# This is cheap (<1s) and prevents stale client issues if the bundled client
+# was generated against an older schema.
+if [ -f "./node_modules/prisma/build/index.js" ]; then
+  echo "  → Regenerating Prisma client..."
+  if node ./node_modules/prisma/build/index.js generate --schema=./prisma/schema.prisma >/dev/null 2>&1; then
+    echo "  → Prisma client regenerated successfully!"
+  else
+    echo "  → WARNING: Prisma client regeneration failed. Continuing with bundled client."
+  fi
+fi
+
 if node ./node_modules/prisma/build/index.js migrate deploy --schema=./prisma/schema.prisma 2>&1; then
   echo "  → Migrations applied successfully!"
   MIGRATION_STATUS="success"
@@ -49,6 +62,22 @@ echo "  → Applied migrations: $MIGRATION_COUNT"
 
 # ─── Seed Database (only if events table is empty) ───────────────────────────
 echo "[4/5] Checking if database needs seeding..."
+
+# ─── Cleanup expired auth tokens ──────────────────────────────────────────────
+echo "  → Cleaning up expired auth tokens..."
+node -e "
+  const { PrismaClient } = require('./generated/prisma/client');
+  const { PrismaPg } = require('./node_modules/@prisma/adapter-pg');
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
+  prisma.authToken.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    .then(r => { console.log('  → Removed ' + r.count + ' expired tokens'); return prisma.\$disconnect(); })
+    .catch(err => { console.error('  → Token cleanup warning:', err.message); return prisma.\$disconnect(); })
+    .finally(() => pool.end());
+" 2>/dev/null || echo "  → Token cleanup skipped"
+
 EVENT_COUNT=$(node -e "
   const { PrismaClient } = require('./generated/prisma/client');
   const { PrismaPg } = require('./node_modules/@prisma/adapter-pg');

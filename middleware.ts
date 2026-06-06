@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 
 const publicPaths = ['/']
-const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan', '/public', '/api/public']
+const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/auto-login', '/_next/', '/favicon.ico', '/api/scan', '/scan', '/r', '/public', '/api/public']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -18,6 +18,9 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-XSS-Protection', '1; mode=block')
   response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=()')
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  response.headers.set('X-Permitted-Cross-Domain-Policies', 'none')
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+  response.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
 
   const csp = [
     "default-src 'self'",
@@ -25,7 +28,7 @@ export async function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self' data:",
-    "connect-src 'self' ws: wss: data:",
+    "connect-src 'self' https:",
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -36,6 +39,14 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Content-Security-Policy', csp)
 
   const isPublic = publicPaths.includes(pathname) || publicPrefixes.some(p => pathname.startsWith(p))
+
+  // Apply Cache-Control: no-store to all /api/* responses (except health check)
+  // to prevent browsers/proxies from caching sensitive data.
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/health')) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+  }
 
   const token = request.cookies.get('auth-token')?.value
   const user = token ? await verifyToken(token) : null
