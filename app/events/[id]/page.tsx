@@ -11,7 +11,7 @@ import {
   Calendar, Users, ArrowLeft, Plus, X, Link2, UserPlus,
   CheckCircle2, Clock, AlertCircle, ShoppingBag, UserCheck,
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
-  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2, Copy, Check
+  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2, Copy, Check, Download, FileSpreadsheet
 } from 'lucide-react';
 import { fetchReportCardImageBase64 } from '@/lib/letterheads';
 import { fetchIdCardImageBase64 } from '@/lib/letterheads';
@@ -154,6 +154,7 @@ export default function EventDetailPage() {
 
   const [regSearch, setRegSearch] = useState('');
   const [regLoading, setRegLoading] = useState(false);
+  const [exportingRegistrations, setExportingRegistrations] = useState(false);
 
   // Analytics tab state
   const [analytics, setAnalytics] = useState<any | null>(null);
@@ -495,6 +496,33 @@ export default function EventDetailPage() {
       alert("Failed to batch print report cards. Please try again.");
     } finally {
       setGeneratingDoc(null);
+    }
+  };
+
+  const handleExportRegistrations = async () => {
+    if (registrations.length === 0) return;
+    setExportingRegistrations(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/export-registrations`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Export failed');
+        return;
+      }
+      const blob = await res.blob();
+      const filename = res.headers.get('content-disposition')?.split('filename="')[1]?.replace('"', '') || 'registrations.xlsx';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Network error during export');
+    } finally {
+      setExportingRegistrations(false);
     }
   };
 
@@ -1335,6 +1363,17 @@ export default function EventDetailPage() {
               <span className="hidden sm:inline">Print All Reports</span>
               <span className="sm:hidden">Print All</span>
             </button>
+            {canManageEvent && (
+              <button
+                onClick={handleExportRegistrations}
+                disabled={exportingRegistrations || registrations.length === 0}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 border border-emerald-100 shrink-0 whitespace-nowrap"
+              >
+                {exportingRegistrations ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                <span className="hidden sm:inline">Export Excel</span>
+                <span className="sm:hidden">Export</span>
+              </button>
+            )}
           </div>
 
           {regLoading ? (
