@@ -50,6 +50,7 @@ export async function GET(
         endDate: true,
         status: true,
         description: true,
+        isPublicRegistrationEnabled: true,
         community: { select: { name: true, location: true } },
       },
     })
