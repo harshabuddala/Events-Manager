@@ -71,12 +71,16 @@ async function main() {
 
   const hashedAdminPassword = await hash(adminPassword, 12)
 
+  // Use a fixed UUID for the admin so sessions survive re-seeds.
+  const adminId = '00000000-0000-0000-0000-000000000001'
+
   const admin = await prisma.user.upsert({
     where: { email: 'admin@edunura.com' },
     update: {
       password: hashedAdminPassword,
     },
     create: {
+      id: adminId,
       email: 'admin@edunura.com',
       password: hashedAdminPassword,
       name: 'Admin User',

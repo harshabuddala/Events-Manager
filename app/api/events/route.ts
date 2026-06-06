@@ -96,6 +96,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Event code already exists' }, { status: 409 })
     }
 
+    // Verify the session user still exists (defense against stale JWT after re-seed)
+    const organizer = await prisma.user.findUnique({ where: { id: session.id }, select: { id: true } })
+    if (!organizer) {
+      return NextResponse.json({ error: 'Session invalid. Please log in again.' }, { status: 401 })
+    }
+
     const event = await prisma.event.create({
       data: {
         code: result.code,
@@ -104,7 +110,7 @@ export async function POST(request: NextRequest) {
         date: result.date,
         endDate: result.endDate || null,
         description: result.description || null,
-        organizerId: session.id,
+        organizerId: organizer.id,
         status: result.status || 'UPCOMING',
       },
     })
