@@ -32,6 +32,9 @@ COPY package.json package-lock.json ./
 # Copy Prisma schema first (changes less frequently than app code)
 COPY prisma ./prisma/
 
+# Copy prisma.config.ts BEFORE generate (Prisma 7.x needs it for datasource URL)
+COPY prisma.config.ts ./
+
 # Generate Prisma Client (dummy DATABASE_URL required by Prisma 7.x config)
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
@@ -44,8 +47,10 @@ COPY lib ./lib/
 COPY hooks ./hooks/
 COPY middleware.ts ./
 COPY entrypoint.sh ./
-COPY prisma.config.ts ./
 COPY public ./public/
+
+# Clear any stale .next cache before building to prevent cache-related errors
+RUN rm -rf .next
 
 # Build Next.js (standalone output)
 ENV NEXT_TELEMETRY_DISABLED=1
