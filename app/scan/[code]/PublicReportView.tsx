@@ -1,8 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import {
   Award,
   BookOpen,
@@ -12,19 +10,13 @@ import {
   ScanLine,
   IdCard,
   Loader2,
-  LogIn,
-  UserCheck,
   Clock,
   Star,
   Shield,
-  X,
+  Download,
 } from 'lucide-react'
 import { fetchReportCardImageBase64 } from '@/lib/letterheads'
 import { fetchIdCardImageBase64 } from '@/lib/letterheads'
-
-// ReportCardPdf and IdCardPdf are loaded dynamically inside the PDF
-// generation handlers to keep @react-pdf/renderer out of the initial
-// client bundle. They are re-exported from the letterheads/pdf modules.
 
 interface PublicReportViewProps {
   registration: any
@@ -95,15 +87,20 @@ export default function PublicReportView({ registration, event }: PublicReportVi
 
   const student = registration?.student || {}
   const visits = Array.isArray(registration?.stallVisits) ? registration.stallVisits : []
+  const allStalls = Array.isArray(event?.stalls) ? event.stalls : []
   const evaluatedVisits = visits.filter((v: any) => v.performance)
-  const totalStalls = Array.isArray(event?.stalls) ? event.stalls.length : 0
+  const totalStalls = allStalls.length
   const completed = totalStalls > 0 && evaluatedVisits.length >= totalStalls
   const isRegistered = !!registration
 
-  const handleViewReportCard = async () => {
+  // Merge all event stalls with visit data so pending stalls are shown too.
+  const mergedStalls = allStalls.map((stall: any) => {
+    const visit = visits.find((v: any) => v.stallId === stall.id || v.stall?.id === stall.id)
+    return { stall, visit }
+  })
+
+  const handleDownloadReportCard = async () => {
     if (!isRegistered) return
-    const newWindow = window.open('', '_blank')
-    if (newWindow) newWindow.document.write('Loading Report Card...')
     try {
       setGeneratingDoc('report')
       const [{ ReportCardPdf }, { pdf }] = await Promise.all([
@@ -118,28 +115,21 @@ export default function PublicReportView({ registration, event }: PublicReportVi
       )
       const blob = await pdf(doc as any).toBlob()
       const url = URL.createObjectURL(blob)
-      if (newWindow) {
-        newWindow.document.write(
-          `<html><head><title>Report Card</title></head><body style="margin:0"><iframe src="${url}" style="border:0;width:100%;height:100vh"></iframe></body></html>`,
-        )
-      } else {
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `report-card-${registration.registrationCode || 'student'}.pdf`
-        a.click()
-      }
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `report-card-${registration.registrationCode || 'student'}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
-      console.error(err)
-      if (newWindow) newWindow.document.write('Failed to generate report card.')
+      console.error('Report card generation failed:', err)
+      alert('Failed to generate report card. Please try again.')
     } finally {
       setGeneratingDoc(null)
     }
   }
 
-  const handleViewIdCard = async () => {
+  const handleDownloadIdCard = async () => {
     if (!isRegistered) return
-    const newWindow = window.open('', '_blank')
-    if (newWindow) newWindow.document.write('Loading ID Card...')
     try {
       setGeneratingDoc('id')
       const [{ IdCardPdf }, { pdf }] = await Promise.all([
@@ -154,19 +144,14 @@ export default function PublicReportView({ registration, event }: PublicReportVi
       )
       const blob = await pdf(doc as any).toBlob()
       const url = URL.createObjectURL(blob)
-      if (newWindow) {
-        newWindow.document.write(
-          `<html><head><title>ID Card</title></head><body style="margin:0"><iframe src="${url}" style="border:0;width:100%;height:100vh"></iframe></body></html>`,
-        )
-      } else {
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `id-card-${registration.registrationCode || 'student'}.pdf`
-        a.click()
-      }
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `id-card-${registration.registrationCode || 'student'}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
-      console.error(err)
-      if (newWindow) newWindow.document.write('Failed to generate ID card.')
+      console.error('ID card generation failed:', err)
+      alert('Failed to generate ID card. Please try again.')
     } finally {
       setGeneratingDoc(null)
     }
@@ -188,13 +173,9 @@ export default function PublicReportView({ registration, event }: PublicReportVi
               </div>
             </div>
           </div>
-          <Link
-            href={`/?next=/scan`}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <LogIn size={14} />
-            Volunteer Login
-          </Link>
+          <div className="text-[10px] font-semibold text-slate-400">
+            {fmtDate(registration?.registeredAt)}
+          </div>
         </div>
       </header>
 
@@ -245,60 +226,63 @@ export default function PublicReportView({ registration, event }: PublicReportVi
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={handleViewReportCard}
+            onClick={handleDownloadReportCard}
             disabled={!isMounted || !isRegistered || generatingDoc !== null}
             className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/70 shadow-sm p-4 text-left hover:border-indigo-200 hover:shadow-md transition-all disabled:opacity-50"
           >
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 grid place-items-center group-hover:bg-indigo-100 transition-colors">
-                <BookOpen size={20} />
+                {generatingDoc === 'report' ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Download size={20} />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-extrabold text-slate-800">Report Card</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
-                  View or download all evaluations
+                  Download PDF with all evaluations
                 </div>
               </div>
-              {generatingDoc === 'report' ? (
-                <Loader2 size={18} className="animate-spin text-indigo-500" />
-              ) : (
-                <ChevronDown size={18} className="-rotate-90 text-slate-400" />
-              )}
+              <ChevronDown size={18} className="-rotate-90 text-slate-400" />
             </div>
           </button>
 
           <button
             type="button"
-            onClick={handleViewIdCard}
+            onClick={handleDownloadIdCard}
             disabled={!isMounted || !isRegistered || generatingDoc !== null}
             className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/70 shadow-sm p-4 text-left hover:border-fuchsia-200 hover:shadow-md transition-all disabled:opacity-50"
           >
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-fuchsia-50 text-fuchsia-600 grid place-items-center group-hover:bg-fuchsia-100 transition-colors">
-                <IdCard size={20} />
+                {generatingDoc === 'id' ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <IdCard size={20} />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-extrabold text-slate-800">ID Card</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
-                  Quick identity verification
+                  Download identity verification card
                 </div>
               </div>
-              {generatingDoc === 'id' ? (
-                <Loader2 size={18} className="animate-spin text-fuchsia-500" />
-              ) : (
-                <ChevronDown size={18} className="-rotate-90 text-slate-400" />
-              )}
+              <ChevronDown size={18} className="-rotate-90 text-slate-400" />
             </div>
           </button>
         </section>
 
-        {/* Evaluations */}
+        {/* Evaluations — show ALL stalls (evaluated + pending) */}
         <section className="rounded-2xl bg-white border border-slate-200/70 shadow-sm overflow-hidden">
           <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-extrabold text-slate-800">Stall Evaluations</h2>
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {evaluatedVisits.length} of {totalStalls || '–'} stalls evaluated
+                {totalStalls > 0 && evaluatedVisits.length < totalStalls && (
+                  <span className="text-amber-600"> ({totalStalls - evaluatedVisits.length} pending)</span>
+                )}
               </p>
             </div>
             {completed ? (
@@ -312,20 +296,20 @@ export default function PublicReportView({ registration, event }: PublicReportVi
             )}
           </header>
 
-          {visits.length === 0 ? (
+          {mergedStalls.length === 0 ? (
             <div className="px-5 py-10 text-center text-xs text-slate-500">
-              No stall visits recorded yet.
+              No stalls assigned to this event yet.
             </div>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {visits.map((v: any) => {
-                const perf = v.performance
-                const open = openStallId === v.id
+              {mergedStalls.map(({ stall, visit }: { stall: any; visit: any }) => {
+                const perf = visit?.performance
+                const open = openStallId === stall.id
                 return (
-                  <li key={v.id} className="px-5 py-3.5">
+                  <li key={stall.id} className="px-5 py-3.5">
                     <button
                       type="button"
-                      onClick={() => setOpenStallId(open ? null : v.id)}
+                      onClick={() => setOpenStallId(open ? null : stall.id)}
                       className="w-full flex items-center justify-between gap-3 text-left"
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -333,20 +317,20 @@ export default function PublicReportView({ registration, event }: PublicReportVi
                           className={`w-9 h-9 rounded-lg grid place-items-center shrink-0 ${
                             perf
                               ? 'bg-emerald-50 text-emerald-600'
-                              : 'bg-slate-100 text-slate-400'
+                              : 'bg-amber-50 text-amber-500'
                           }`}
                         >
                           {perf ? <Star size={16} /> : <Clock size={16} />}
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-slate-800 truncate">
-                            {v.stall?.name || 'Stall'}
+                            {stall.name || 'Stall'}
                           </div>
                           <div className="text-[11px] text-slate-500">
                             {perf ? (
-                              <>By {perf.volunteer?.name || 'Evaluator'}</>
+                              <>Evaluated by {perf.volunteer?.name || 'Evaluator'}</>
                             ) : (
-                              'Not evaluated yet'
+                              <span className="text-amber-600 font-medium">Pending evaluation</span>
                             )}
                           </div>
                         </div>
@@ -359,6 +343,11 @@ export default function PublicReportView({ registration, event }: PublicReportVi
                             )}`}
                           >
                             {perf.grade || '—'}
+                          </span>
+                        )}
+                        {!perf && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            Pending
                           </span>
                         )}
                         <ChevronDown
@@ -382,7 +371,7 @@ export default function PublicReportView({ registration, event }: PublicReportVi
                             Evaluated
                           </div>
                           <div className="text-sm font-semibold text-slate-700">
-                            {fmtDate(perf.evaluatedAt || v.visitedAt)}
+                            {fmtDate(perf.evaluatedAt || visit?.visitedAt)}
                           </div>
                         </div>
                         {perf.remarks && (
@@ -395,11 +384,32 @@ export default function PublicReportView({ registration, event }: PublicReportVi
                             </div>
                           </div>
                         )}
+                        {perf.metricScores && typeof perf.metricScores === 'object' && (
+                          <div className="col-span-2">
+                            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                              Metric Scores
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {Object.entries(perf.metricScores)
+                                .filter(([, v]) => typeof v === 'number')
+                                .map(([name, value]) => (
+                                  <span
+                                    key={name}
+                                    className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md"
+                                  >
+                                    {name}: <strong>{String(value)}</strong>
+                                  </span>
+                                ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     {open && !perf && (
-                      <div className="mt-3 ml-12 text-[11px] text-slate-500 italic">
-                        Waiting for an evaluator to grade this stall.
+                      <div className="mt-3 ml-12 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                        <div className="text-[11px] text-amber-700">
+                          This stall has not been evaluated yet. Check back later for the evaluation results.
+                        </div>
                       </div>
                     )}
                   </li>
@@ -409,30 +419,8 @@ export default function PublicReportView({ registration, event }: PublicReportVi
           )}
         </section>
 
-        {/* Volunteer CTA */}
-        <section className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 grid place-items-center shrink-0">
-            <UserCheck size={18} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-extrabold text-indigo-900">Are you a volunteer?</h3>
-            <p className="text-[12px] text-indigo-700/80 mt-0.5">
-              Log in to record evaluations for the stalls you are assigned to. The
-              information above is shown to anyone with this QR code — login is only
-              required for grading.
-            </p>
-            <Link
-              href={`/?next=/scan`}
-              className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <LogIn size={14} />
-              Volunteer Login
-            </Link>
-          </div>
-        </section>
-
         <footer className="text-center text-[10px] text-slate-400 pt-2 pb-6">
-          Powered by Edunura Events • Report generated {fmtDate(registration?.registeredAt)}
+          Powered by Edunura Events
         </footer>
       </main>
     </div>
