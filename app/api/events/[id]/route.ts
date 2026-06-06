@@ -30,7 +30,7 @@ export async function GET(
       include: {
         community: { select: { name: true, location: true } },
         organizer: { select: { name: true } },
-        stalls: { select: { id: true, code: true, name: true, status: true } },
+        stalls: { select: { id: true, code: true, name: true, status: true, metrics: true } },
         assignments: {
           include: {
             volunteer: { select: { id: true, name: true, role: true, status: true } },
