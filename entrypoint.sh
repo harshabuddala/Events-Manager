@@ -47,20 +47,20 @@ MIGRATION_COUNT=$(node -e "
 " 2>/dev/null || echo "0")
 echo "  → Applied migrations: $MIGRATION_COUNT"
 
-# ─── Seed Database (only if users table is empty) ───────────────────────────
+# ─── Seed Database (only if events table is empty) ───────────────────────────
 echo "[4/5] Checking if database needs seeding..."
-USER_COUNT=$(node -e "
+EVENT_COUNT=$(node -e "
   const { PrismaClient } = require('./generated/prisma/client');
   const { PrismaPg } = require('./node_modules/@prisma/adapter-pg');
   const { Pool } = require('pg');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
-  prisma.user.count().then(c => { console.log(c); prisma.\$disconnect(); }).catch(() => { console.log(0); prisma.\$disconnect(); });
+  prisma.event.count().then(c => { console.log(c); prisma.\$disconnect(); }).catch(() => { console.log(0); prisma.\$disconnect(); });
 " 2>/dev/null || echo "0")
 
-if [ "$USER_COUNT" = "0" ]; then
-  echo "  → Database is empty, running seed..."
+if [ "$EVENT_COUNT" = "0" ]; then
+  echo "  → No events found in database, running seed..."
   
   if [ -f "./node_modules/tsx/dist/cli.mjs" ]; then
     echo "  → Using tsx from node_modules..."
@@ -76,7 +76,7 @@ if [ "$USER_COUNT" = "0" ]; then
     SEED_STATUS="failed"
   fi
 else
-  echo "  → Database already has $USER_COUNT user(s), skipping seed."
+  echo "  → Database already has $EVENT_COUNT event(s), skipping seed."
   SEED_STATUS="skipped"
   
   if [ -n "$ADMIN_PASSWORD" ]; then
@@ -131,12 +131,12 @@ else
 fi
 echo "  ╚══════════════════════════════════════════════════════╝"
 echo ""
-
+ 
 # ─── Print Status Summary ──────────────────────────────────────────────────
 echo "  📊 STATUS SUMMARY:"
 echo "     • Migrations: $MIGRATION_STATUS ($MIGRATION_COUNT migrations applied)"
 echo "     • Seed:       $SEED_STATUS"
-echo "     • Users:      $USER_COUNT"
+echo "     • Events:      $EVENT_COUNT"
 echo ""
 
 # ─── Validate Environment ───────────────────────────────────────────────────

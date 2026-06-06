@@ -13,7 +13,7 @@ export async function POST(
 ) {
   try {
     const session = await getSession()
-    if (!session || session.role === 'VOLUNTEER') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -42,7 +42,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getSession()
-    if (!session || session.role === 'VOLUNTEER') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

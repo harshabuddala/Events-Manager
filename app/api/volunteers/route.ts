@@ -21,7 +21,7 @@ const createSchema = z.object({
 export async function GET(request: Request) {
   try {
     const session = await getSession()
-    if (!session || session.role !== 'ADMIN') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || session.role === 'VOLUNTEER') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

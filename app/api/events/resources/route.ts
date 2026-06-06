@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 export async function GET() {
   try {
     const session = await getSession()
-    if (!session || session.role === 'VOLUNTEER') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'MANAGER')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -97,6 +97,17 @@ export default function EventsPageContent() {
     fetchEvents();
   }, [fetchEvents]);
 
+  useEffect(() => {
+    if (searchParams.get('create') === 'true' && canManageEvents) {
+      setEditingEvent(null);
+      setIsModalOpen(true);
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete('create');
+      const paramStr = nextParams.toString();
+      router.replace(`/events${paramStr ? `?${paramStr}` : ''}`);
+    }
+  }, [searchParams, canManageEvents, router]);
+
   const handleSuccess = () => {
     setEditingEvent(null);
     fetchEvents();

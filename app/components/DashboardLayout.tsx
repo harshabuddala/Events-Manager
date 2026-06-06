@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import { Menu, Bell, Plus } from 'lucide-react';
@@ -23,6 +24,7 @@ export default function DashboardLayout({
   subtitle: string,
   headerAction?: React.ReactNode
 }) {
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
@@ -80,7 +82,10 @@ export default function DashboardLayout({
 
             {/* CTA - only for admins/managers */}
             {!isVolunteerRole && (
-              <button className="hidden sm:flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-[0_4px_12px_rgba(108,59,255,0.25)] hover:shadow-[0_6px_16px_rgba(108,59,255,0.3)] active:scale-95">
+              <button 
+                onClick={() => router.push('/events?create=true')}
+                className="hidden sm:flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-[0_4px_12px_rgba(108,59,255,0.25)] hover:shadow-[0_6px_16px_rgba(108,59,255,0.3)] active:scale-95"
+              >
                 <Plus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Create Event</span>
                 <span className="sm:hidden">Create</span>
