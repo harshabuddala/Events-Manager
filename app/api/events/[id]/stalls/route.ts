@@ -53,6 +53,35 @@ export async function DELETE(
       return NextResponse.json({ error: 'Stall ID is required' }, { status: 400 })
     }
 
+    // ── 1) Unassign every volunteer from this (event, stall) pair ──
+    //    so the stall can be safely removed without leaving orphaned
+    //    volunteer assignments.
+    const affectedAssignments = await prisma.volunteerAssignment.findMany({
+      where: { eventId: id, stallId },
+      select: { volunteerId: true },
+    })
+
+    if (affectedAssignments.length > 0) {
+      await prisma.volunteerAssignment.deleteMany({
+        where: { eventId: id, stallId },
+      })
+
+      // Reset volunteer status to AVAILABLE if they have no other assignments left.
+      const volunteerIds = [...new Set(affectedAssignments.map(a => a.volunteerId))]
+      for (const vid of volunteerIds) {
+        const remaining = await prisma.volunteerAssignment.count({
+          where: { volunteerId: vid },
+        })
+        if (remaining === 0) {
+          await prisma.volunteer.update({
+            where: { id: vid },
+            data: { status: 'AVAILABLE' },
+          })
+        }
+      }
+    }
+
+    // ── 2) Now safely disconnect the stall from the event ──
     const stall = await prisma.stall.update({
       where: { id: stallId },
       data: { events: { disconnect: { id } } },
