@@ -2,10 +2,15 @@
 
 import React, { useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { Save, User, Bell, Shield, Paintbrush, Globe, Smartphone } from 'lucide-react';
+import { Save, User, Bell, Shield, Paintbrush, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export default function GeneralSettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
+  const [pwForm, setPwForm] = useState({ current: '', new: '', confirm: '' });
+  const [pwVisible, setPwVisible] = useState({ current: false, new: false, confirm: false });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMessage, setPwMessage] = useState<string | null>(null);
+  const [pwError, setPwError] = useState<string | null>(null);
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -13,6 +18,45 @@ export default function GeneralSettingsPage() {
     { id: 'appearance', label: 'Appearance', icon: Paintbrush },
     { id: 'security', label: 'Security', icon: Shield },
   ];
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+    setPwMessage(null);
+
+    if (pwForm.new !== pwForm.confirm) {
+      setPwError('New password and confirmation do not match');
+      return;
+    }
+    if (pwForm.new.length < 8) {
+      setPwError('New password must be at least 8 characters');
+      return;
+    }
+
+    setPwSaving(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: pwForm.current,
+          newPassword: pwForm.new,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setPwError(data.error || 'Failed to change password');
+      } else {
+        setPwMessage('Password updated successfully');
+        setPwForm({ current: '', new: '', confirm: '' });
+      }
+    } catch {
+      setPwError('Network error. Please try again.');
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   return (
     <DashboardLayout 
@@ -98,10 +142,103 @@ export default function GeneralSettingsPage() {
             </div>
           )}
 
-          {activeTab !== 'profile' && (
+          {activeTab === 'security' && (
+            <form onSubmit={handleChangePassword} className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
+              <div className="p-5 sm:p-6 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-800">Change Password</h3>
+                <p className="text-sm text-slate-500 mt-1">Update your admin account password.</p>
+              </div>
+              <div className="p-5 sm:p-6 space-y-5">
+                {pwError && (
+                  <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
+                    {pwError}
+                  </div>
+                )}
+                {pwMessage && (
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+                    {pwMessage}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Current Password</label>
+                  <div className="relative">
+                    <input
+                      type={pwVisible.current ? 'text' : 'password'}
+                      value={pwForm.current}
+                      onChange={(e) => setPwForm((f) => ({ ...f, current: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 pr-10 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPwVisible((v) => ({ ...v, current: !v.current }))}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {pwVisible.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">New Password</label>
+                  <div className="relative">
+                    <input
+                      type={pwVisible.new ? 'text' : 'password'}
+                      value={pwForm.new}
+                      onChange={(e) => setPwForm((f) => ({ ...f, new: e.target.value }))}
+                      required
+                      minLength={8}
+                      className="w-full px-3 py-2 pr-10 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPwVisible((v) => ({ ...v, new: !v.new }))}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {pwVisible.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">Minimum 8 characters</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Confirm New Password</label>
+                  <div className="relative">
+                    <input
+                      type={pwVisible.confirm ? 'text' : 'password'}
+                      value={pwForm.confirm}
+                      onChange={(e) => setPwForm((f) => ({ ...f, confirm: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 pr-10 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPwVisible((v) => ({ ...v, confirm: !v.confirm }))}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {pwVisible.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={pwSaving}
+                  className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  {pwSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {pwSaving ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {activeTab !== 'profile' && activeTab !== 'security' && (
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-12 text-center">
               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Globe className="w-5 h-5 text-slate-400" />
+                <Shield className="w-5 h-5 text-slate-400" />
               </div>
               <h3 className="text-lg font-bold text-slate-800">Section Under Construction</h3>
               <p className="text-sm text-slate-500 mt-2 max-w-sm mx-auto">

@@ -20,8 +20,21 @@ async function main() {
   const isProduction = process.env.NODE_ENV === 'production'
   const shouldClean = process.env.SEED_CLEAN === 'true'
 
-  if (shouldClean) {
-    console.log('SEED_CLEAN=true: Cleaning existing data...')
+  // Auto-detect if old stall data exists (pre-new-seed stalls like ST-001)
+  // and force-clean so the new 5 stalls are seeded.
+  const oldStall = await prisma.stall.findFirst({
+    where: { code: { notIn: ['ST-MATHS', 'ST-SCIENCE', 'ST-FITNESS', 'ST-CREATIVE', 'ST-ENGLISH'] } },
+  })
+  const hasNewStalls = await prisma.stall.findFirst({
+    where: { code: { in: ['ST-MATHS', 'ST-SCIENCE', 'ST-FITNESS', 'ST-CREATIVE', 'ST-ENGLISH'] } },
+  })
+
+  if (shouldClean || oldStall) {
+    if (oldStall) {
+      console.log(`Detected old stall data (${oldStall.code}). Cleaning for fresh seed...`)
+    } else {
+      console.log('SEED_CLEAN=true: Cleaning existing data...')
+    }
     await prisma.performance.deleteMany()
     await prisma.stallVisit.deleteMany()
     await prisma.volunteerAssignment.deleteMany()
@@ -33,13 +46,10 @@ async function main() {
     await prisma.community.deleteMany()
     await prisma.user.deleteMany()
     console.log('Cleaned existing data')
-  } else {
-    const existingEvents = await prisma.event.count()
-    if (existingEvents > 0) {
-      console.log(`Database already has ${existingEvents} event(s). Skipping seed.`)
-      console.log('To force re-seed, set SEED_CLEAN=true')
-      return
-    }
+  } else if (hasNewStalls) {
+    console.log('New stalls already present. Skipping seed.')
+    console.log('To force re-seed, set SEED_CLEAN=true')
+    return
   }
 
   let adminPassword = process.env.ADMIN_PASSWORD

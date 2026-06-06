@@ -97,12 +97,40 @@ export async function DELETE(
 
     const { id } = await params
 
+    // ── Guard: cannot delete if registrations exist ──
     const regCount = await prisma.registration.count({ where: { eventId: id } })
     if (regCount > 0) {
-      return NextResponse.json({ error: 'Cannot delete event with registrations' }, { status: 400 })
+      return NextResponse.json(
+        { error: `Cannot delete event with ${regCount} registration(s). Remove registrations first.` },
+        { status: 400 }
+      )
     }
 
-    await prisma.event.delete({ where: { id } })
+    // ── Guard: cannot delete if stalls are still linked ──
+    const eventWithStalls = await prisma.event.findUnique({
+      where: { id },
+      include: { stalls: { select: { id: true, name: true }, take: 1 } },
+    })
+    if (eventWithStalls && eventWithStalls.stalls.length > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete event while stalls are linked. Remove all stalls from the event first.' },
+        { status: 400 }
+      )
+    }
+
+    // ── Safe to delete: auto-unassign volunteers, clean visits/performances ──
+    await prisma.$transaction([
+      prisma.performance.deleteMany({
+        where: { stallVisit: { registration: { eventId: id } } },
+      }),
+      prisma.stallVisit.deleteMany({
+        where: { registration: { eventId: id } },
+      }),
+      prisma.volunteerAssignment.deleteMany({
+        where: { eventId: id },
+      }),
+      prisma.event.delete({ where: { id } }),
+    ])
 
     return NextResponse.json({ success: true })
   } catch (error) {

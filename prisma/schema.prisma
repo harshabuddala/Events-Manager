@@ -217,7 +217,7 @@ model VolunteerAssignment {
   createdAt   DateTime @default(now())
 
   // Relations
-  event     Event     @relation(fields: [eventId], references: [id])
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   stall     Stall     @relation(fields: [stallId], references: [id], onDelete: Cascade)
   volunteer Volunteer @relation(fields: [volunteerId], references: [id])
 
