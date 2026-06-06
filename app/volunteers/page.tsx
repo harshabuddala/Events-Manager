@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import VolunteerFormModal from '@/app/components/VolunteerFormModal';
 import ResetPasswordModal from '@/app/components/ResetPasswordModal';
 import QrLoginGenerator from '@/app/components/QrLoginGenerator';
+import ImportVolunteersModal from '@/app/components/ImportVolunteersModal';
 import { 
   UserCheck, Search, 
   MoreVertical, ArrowRight, Plus, 
   CheckCircle2, Mail, Phone, Calendar as CalendarIcon, Star, Loader2,
-  Edit2, Trash2, AlertTriangle, KeyRound, QrCode
+  Edit2, Trash2, AlertTriangle, KeyRound, QrCode, Upload, X
 } from 'lucide-react';
 
 interface Volunteer {
@@ -41,6 +42,18 @@ export default function VolunteersPage() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
   const [resetPasswordVolunteer, setResetPasswordVolunteer] = useState<Volunteer | null>(null);
   const [qrLoginVolunteer, setQrLoginVolunteer] = useState<Volunteer | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{show: boolean; created: number; skipped: number; failed: number; errors: string[]}>({ show: false, created: 0, skipped: 0, failed: 0, errors: [] });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Import modal state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importPreviewRows, setImportPreviewRows] = useState<any[][]>([]);
+
+  // Bulk selection state
+  const [selectedVolunteerIds, setSelectedVolunteerIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const fetchVolunteers = useCallback(async () => {
     try {
@@ -112,6 +125,110 @@ export default function VolunteersPage() {
     setIsFormModalOpen(true);
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side parse with xlsx
+    const xlsx = await import('xlsx');
+    const data = await file.arrayBuffer();
+    const workbook = xlsx.read(data, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+    if (!rows.length) {
+      alert('The file appears to be empty');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setImportPreviewRows(rows);
+    setIsImportModalOpen(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleConfirmImport = async (payload: {
+    rows: any[][]
+    nameColumn: number
+    emailColumn: number
+    passwordColumn?: number
+  }) => {
+    setImporting(true);
+    setImportResult({ show: false, created: 0, skipped: 0, failed: 0, errors: [] });
+
+    try {
+      const res = await fetch('/api/volunteers/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Import failed');
+      } else {
+        setImportResult({
+          show: true,
+          created: data.summary?.created || 0,
+          skipped: data.summary?.skipped || 0,
+          failed: data.summary?.failed || 0,
+          errors: data.errors || [],
+        });
+        setIsImportModalOpen(false);
+        fetchVolunteers();
+      }
+    } catch {
+      alert('Network error during import');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // --- Bulk selection helpers ---
+  const toggleSelectVolunteer = (id: string) => {
+    setSelectedVolunteerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedVolunteerIds.size === volunteers.length && volunteers.length > 0) {
+      setSelectedVolunteerIds(new Set());
+    } else {
+      setSelectedVolunteerIds(new Set(volunteers.map((v) => v.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedVolunteerIds(new Set());
+
+  const confirmBulkDelete = async () => {
+    if (selectedVolunteerIds.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const res = await fetch('/api/volunteers/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedVolunteerIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Bulk delete failed');
+      } else {
+        setVolunteers((prev) => prev.filter((v) => !selectedVolunteerIds.has(v.id)));
+        setSelectedVolunteerIds(new Set());
+        setShowBulkDeleteConfirm(false);
+      }
+    } catch {
+      alert('Network error during bulk delete');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   const handleEditVolunteer = (volunteer: Volunteer) => {
     setEditingVolunteer(volunteer);
     setIsFormModalOpen(true);
@@ -150,13 +267,30 @@ export default function VolunteersPage() {
       subtitle="Manage your volunteer network, assign stalls, and track performance."
       headerAction={
         canManageVolunteers && (
-          <button 
-            onClick={handleAddVolunteer}
-            className="hidden lg:flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-md hover:shadow-lg transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Volunteer</span>
-          </button>
+          <div className="hidden lg:flex items-center gap-2">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+            >
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              <span>{importing ? 'Importing...' : 'Import'}</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button 
+              onClick={handleAddVolunteer}
+              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-md hover:shadow-lg transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Volunteer</span>
+            </button>
+          </div>
         )
       }
     >
@@ -198,12 +332,75 @@ export default function VolunteersPage() {
         </div>
       </div>
 
+      {/* Import Result */}
+      {importResult.show && (
+        <div className={`rounded-xl border p-4 mb-4 ${importResult.failed > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 className={`text-sm font-bold ${importResult.failed > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+                Import Complete
+              </h4>
+              <p className={`text-xs mt-0.5 ${importResult.failed > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                <strong>{importResult.created}</strong> created, <strong>{importResult.skipped}</strong> skipped{importResult.failed > 0 && <>, <strong>{importResult.failed}</strong> failed</>}
+              </p>
+              {importResult.errors.length > 0 && (
+                <ul className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                  {importResult.errors.map((err, i) => (
+                    <li key={i} className="text-[11px] text-amber-800">{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <button
+              onClick={() => setImportResult(r => ({ ...r, show: false }))}
+              className="text-xs text-slate-400 hover:text-slate-600 shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Volunteers List */}
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] overflow-hidden">
+        {/* Bulk action bar */}
+        {canManageVolunteers && selectedVolunteerIds.size > 0 && (
+          <div className="px-5 py-3 border-b border-slate-100 bg-violet-50/60 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-bold text-violet-800">
+                {selectedVolunteerIds.size} selected
+              </span>
+              <button
+                onClick={clearSelection}
+                className="text-xs font-medium text-slate-500 hover:text-slate-700 flex items-center gap-1"
+              >
+                <X size={12} />
+                Clear
+              </button>
+            </div>
+            <button
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Trash2 size={13} />
+              Delete Selected
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left whitespace-nowrap min-w-[900px]">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
+                {canManageVolunteers && (
+                  <th className="px-4 py-4 w-[48px]">
+                    <input
+                      type="checkbox"
+                      checked={volunteers.length > 0 && selectedVolunteerIds.size === volunteers.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500/20 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest w-[25%]">Volunteer Details</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contact Information</th>
                 <th className="px-5 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status / Stall</th>
@@ -214,20 +411,30 @@ export default function VolunteersPage() {
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={canManageVolunteers ? 6 : 5} className="px-5 py-8 text-center text-slate-500">
                     <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
                     Loading volunteers...
                   </td>
                 </tr>
               ) : volunteers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={canManageVolunteers ? 6 : 5} className="px-5 py-8 text-center text-slate-500">
                     No volunteers found.
                   </td>
                 </tr>
               ) : (
                 volunteers.map((vol) => (
-                  <tr key={vol.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <tr key={vol.id} className={`hover:bg-slate-50/80 transition-colors group ${selectedVolunteerIds.has(vol.id) ? 'bg-violet-50/40' : ''}`}>
+                    {canManageVolunteers && (
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedVolunteerIds.has(vol.id)}
+                          onChange={() => toggleSelectVolunteer(vol.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500/20 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="px-5 py-4">
                       <div className="flex gap-3 items-center">
                         <div className="w-10 h-10 rounded-full bg-violet-100 border border-violet-200/60 flex items-center justify-center shrink-0 text-violet-700 text-sm font-bold shadow-sm">
@@ -365,6 +572,15 @@ export default function VolunteersPage() {
         targetUserName={qrLoginVolunteer?.name}
       />
 
+      {/* Import Volunteers Modal */}
+      <ImportVolunteersModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={handleConfirmImport}
+        previewRows={importPreviewRows}
+        isImporting={importing}
+      />
+
       {/* Delete Confirmation Modal */}
       {deletingVolunteer && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -407,6 +623,56 @@ export default function VolunteersPage() {
                   <>
                     <Trash2 className="w-4 h-4" />
                     Delete Volunteer
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Delete {selectedVolunteerIds.size} Volunteers</h3>
+                <p className="text-sm text-slate-500">This action cannot be undone</p>
+              </div>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-slate-700">
+                Are you sure you want to permanently delete <strong>{selectedVolunteerIds.size} volunteers</strong> and all their associated data (assignments, evaluations)?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                disabled={isBulkDeleting}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBulkDelete}
+                disabled={isBulkDeleting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 rounded-lg transition-colors"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Delete {selectedVolunteerIds.size}
                   </>
                 )}
               </button>
