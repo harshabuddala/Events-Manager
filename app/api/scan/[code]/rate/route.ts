@@ -208,28 +208,6 @@ export async function POST(
     const isCompleted = totalStalls > 0 && gradedVisits.length >= totalStalls;
 
     if (isCompleted) {
-      const totalScore = gradedVisits.reduce((acc, curr) => acc + (curr.performance?.score || 0), 0);
-      const avgScore = totalScore / gradedVisits.length;
-
-      let overallGrade = 'E';
-      if (avgScore >= 9) overallGrade = 'A+';
-      else if (avgScore >= 8) overallGrade = 'A';
-      else if (avgScore >= 7) overallGrade = 'B';
-      else if (avgScore >= 6) overallGrade = 'C';
-      else if (avgScore >= 5) overallGrade = 'D';
-
-      let topSkill = 'None';
-      let highestScore = -1;
-      for (const visit of gradedVisits) {
-        if (visit.performance && visit.performance.score > highestScore) {
-          highestScore = visit.performance.score;
-          const stallInfo = registration.event.stalls.find((s: any) => s.id === visit.stallId);
-          if (stallInfo) topSkill = `${stallInfo.name} (${(highestScore / 10) * 100}%)`;
-        }
-      }
-
-
-
       await prisma.registration.update({
         where: { id: registration.id },
         data: { status: 'COMPLETED', completedAt: new Date() }
@@ -320,27 +298,10 @@ export async function PATCH(
     const isCompleted = totalStalls > 0 && gradedVisits.length >= totalStalls
 
     if (isCompleted) {
-      const totalScore = gradedVisits.reduce((acc, curr) => acc + (curr.performance?.score || 0), 0)
-      const avgScore = totalScore / gradedVisits.length
-
-      let overallGrade = 'E'
-      if (avgScore >= 9) overallGrade = 'A+'
-      else if (avgScore >= 8) overallGrade = 'A'
-      else if (avgScore >= 7) overallGrade = 'B'
-      else if (avgScore >= 6) overallGrade = 'C'
-      else if (avgScore >= 5) overallGrade = 'D'
-
-      let topSkill = 'None'
-      let highestScore = -1
-      for (const visit of gradedVisits) {
-        if (visit.performance && visit.performance.score > highestScore) {
-          highestScore = visit.performance.score
-          const stallInfo = registration.event.stalls.find((s: any) => s.id === visit.stallId)
-          if (stallInfo) topSkill = `${stallInfo.name} (${(highestScore / 10) * 100}%)`
-        }
-      }
-
-
+      await prisma.registration.update({
+        where: { id: registration.id },
+        data: { status: 'COMPLETED', completedAt: new Date() }
+      })
     }
 
     return NextResponse.json({ success: true, performance })

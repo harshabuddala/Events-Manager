@@ -11,10 +11,8 @@ export const fetchIdCardImageBase64 = async (): Promise<string> => {
   
   imageFetchPromise = (async () => {
     try {
-      console.log("[DEBUG] Fetching ID card design template from origin...");
       const origin = window.location.origin;
       const url = `${origin}/id_card_design.png`;
-      console.log(`[DEBUG] Attempting fetch to: ${url}`);
       
       const response = await fetch(url);
       if (!response.ok) {
@@ -22,24 +20,18 @@ export const fetchIdCardImageBase64 = async (): Promise<string> => {
       }
       
       const blob = await response.blob();
-      console.log(`[DEBUG] ID card image loaded, size: ${blob.size} bytes, type: ${blob.type}`);
       
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64data = reader.result as string;
           cachedBase64Image = base64data;
-          console.log("[DEBUG] Successfully converted ID card image to base64 data URI.");
           resolve(base64data);
         };
-        reader.onerror = (err) => {
-          console.error("[DEBUG] FileReader error:", err);
-          reject(err);
-        };
+        reader.onerror = (err) => reject(err);
         reader.readAsDataURL(blob);
       });
     } catch (error) {
-      console.error("[DEBUG] Error pre-fetching ID card background image:", error);
       // Fallback to absolute URL if fetch fails
       return `${window.location.origin}/id_card_design.png`;
     }
