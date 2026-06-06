@@ -209,6 +209,7 @@ export async function POST(
         eventId,
         studentId: student.id,
         status: 'REGISTERED',
+        registeredBy: session.role === 'ADMIN' || session.role === 'MANAGER' ? 'ADMIN' : 'VOLUNTEER',
       },
       include: {
         student: { select: { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true } },

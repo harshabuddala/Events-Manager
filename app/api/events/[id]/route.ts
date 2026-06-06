@@ -10,6 +10,7 @@ const updateSchema = z.object({
   endDate: z.string().datetime().optional().or(z.literal('')),
   status: z.enum(['UPCOMING', 'LIVE', 'COMPLETED', 'CANCELLED']).optional(),
   description: z.string().max(2000).optional().or(z.literal('')),
+  isPublicRegistrationEnabled: z.boolean().optional(),
 })
 
 export async function GET(

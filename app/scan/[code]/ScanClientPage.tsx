@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { 
   Award, BookOpen, Clock, CheckCircle2, AlertCircle, 
   Send, UserCheck, Star, Shield, ArrowLeft, LogIn,
-  ChevronDown, ScanLine, Printer, Download, Eye, IdCard, Loader2
+  ChevronDown, ScanLine, Printer, Eye, IdCard, Loader2
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -34,7 +34,6 @@ export default function ScanClientPage({
   const [isMounted, setIsMounted] = useState(false)
   const [bgImageBase64, setBgImageBase64] = useState<string | null>(null)
   const [idBgImageBase64, setIdBgImageBase64] = useState<string | null>(null)
-  const [idCardQrCode, setIdCardQrCode] = useState<string | null>(null)
 
   useEffect(() => {
     setIsMounted(true)
@@ -47,22 +46,7 @@ export default function ScanClientPage({
     }).catch(console.error)
   }, [])
 
-  useEffect(() => {
-    if (!registration) return;
-    import('qrcode').then((QRCodeLib) => {
-      const QRCode = QRCodeLib.default || QRCodeLib;
-      QRCode.toDataURL(registration.registrationCode, {
-        width: 250,
-        margin: 1,
-        color: {
-          dark: '#0a0f2d',
-          light: '#ffffff',
-        },
-      }).then((url) => {
-        setIdCardQrCode(url);
-      }).catch(console.error);
-    }).catch(console.error);
-  }, [registration]);
+
   const [generatingDoc, setGeneratingDoc] = useState<'report-view' | 'report-print' | 'id-view' | 'id-print' | null>(null);
 
   const handleViewReportCard = async () => {
@@ -99,16 +83,25 @@ export default function ScanClientPage({
       const doc = <ReportCardPdf registration={registration} backgroundImage={bgImageBase64} />;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ReportCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.top = '-10000px';
+      printFrame.style.left = '-10000px';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.src = url;
+      document.body.appendChild(printFrame);
+      printFrame.onload = () => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
     } catch (error) {
-      console.error("Failed to download report card PDF:", error);
-      alert("Failed to download report card PDF. Please try again.");
+      console.error("Failed to print report card PDF:", error);
+      alert("Failed to print report card PDF. Please try again.");
     } finally {
       setGeneratingDoc(null);
     }
@@ -122,12 +115,15 @@ export default function ScanClientPage({
     }
     try {
       setGeneratingDoc('id-view');
+      const { generateLogoQrCode } = await import('@/lib/qr');
+      const qrCodeDataUrl = await generateLogoQrCode(registration.registrationCode, 250);
+
       const { pdf } = await import('@react-pdf/renderer');
       const doc = (
         <IdCardPdf 
           registration={registration} 
           backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={idCardQrCode} 
+          qrCodeDataUrl={qrCodeDataUrl} 
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -150,26 +146,38 @@ export default function ScanClientPage({
     if (!registration) return;
     try {
       setGeneratingDoc('id-print');
+      const { generateLogoQrCode } = await import('@/lib/qr');
+      const qrCodeDataUrl = await generateLogoQrCode(registration.registrationCode, 250);
+
       const { pdf } = await import('@react-pdf/renderer');
       const doc = (
         <IdCardPdf 
           registration={registration} 
           backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={idCardQrCode} 
+          qrCodeDataUrl={qrCodeDataUrl} 
         />
       );
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `IDCard_${registration.student.name.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.top = '-10000px';
+      printFrame.style.left = '-10000px';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.src = url;
+      document.body.appendChild(printFrame);
+      printFrame.onload = () => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
     } catch (error) {
-      console.error("Failed to download ID card PDF:", error);
-      alert("Failed to download ID card PDF. Please try again.");
+      console.error("Failed to print ID card PDF:", error);
+      alert("Failed to print ID card PDF. Please try again.");
     } finally {
       setGeneratingDoc(null);
     }
@@ -814,9 +822,9 @@ export default function ScanClientPage({
                         {generatingDoc === 'report-print' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Download className="w-4 h-4" />
+                          <Printer className="w-4 h-4" />
                         )}
-                        {generatingDoc === 'report-print' ? 'Generating...' : 'Download PDF'}
+                        {generatingDoc === 'report-print' ? 'Preparing...' : 'Print Report'}
                       </button>
                     </div>
                   </div>
@@ -827,10 +835,10 @@ export default function ScanClientPage({
                     <div className="flex flex-col sm:flex-row gap-3 w-full">
                       <button
                         type="button"
-                        disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCode}
+                        disabled={generatingDoc !== null}
                         onClick={handleViewIdCard}
                         className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                        title={!idBgImageBase64 || !idCardQrCode ? "Preparing ID card assets..." : "View ID Card"}
+                        title="View ID Card"
                       >
                         {generatingDoc === 'id-view' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -842,17 +850,17 @@ export default function ScanClientPage({
 
                       <button
                         type="button"
-                        disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCode}
+                        disabled={generatingDoc !== null}
                         onClick={handleDownloadIdCard}
                         className="flex-1 flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white py-3.5 sm:py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
-                        title={!idBgImageBase64 || !idCardQrCode ? "Preparing ID card assets..." : "Download ID Card"}
+                        title="Print ID Card"
                       >
                         {generatingDoc === 'id-print' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Download className="w-4 h-4" />
+                          <Printer className="w-4 h-4" />
                         )}
-                        {generatingDoc === 'id-print' ? 'Generating ID...' : 'Download ID Card'}
+                        {generatingDoc === 'id-print' ? 'Preparing...' : 'Print ID Card'}
                       </button>
                    </div>
                  </div>

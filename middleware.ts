@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 
 const publicPaths = ['/']
-const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan']
+const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/api/migrate', '/auto-login', '/_next/', '/favicon.ico', '/scan', '/api/scan', '/public', '/api/public']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -31,6 +31,7 @@ export async function middleware(request: NextRequest) {
     "form-action 'self'",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
+    "frame-src 'self' blob:",
   ].join('; ')
   response.headers.set('Content-Security-Policy', csp)
 

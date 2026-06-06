@@ -105,6 +105,7 @@ model Event {
   endDate       DateTime?
   status        EventStatus @default(UPCOMING)
   description   String?
+  isPublicRegistrationEnabled Boolean @default(true)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -150,6 +151,7 @@ model Registration {
   registeredAt     DateTime           @default(now())
   completedAt      DateTime?
   notes            String?
+  registeredBy     String             @default("PUBLIC")
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 

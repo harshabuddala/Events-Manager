@@ -11,7 +11,7 @@ import {
   Calendar, Users, ArrowLeft, Plus, X, Link2, UserPlus,
   CheckCircle2, Clock, AlertCircle, ShoppingBag, UserCheck,
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
-  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2
+  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2, Copy, Check
 } from 'lucide-react';
 import { ReportCardPdf, fetchReportCardImageBase64 } from '@/app/components/ReportCardPdf';
 import { IdCardPdf, fetchIdCardImageBase64 } from '@/app/components/IdCardPdf';
@@ -25,6 +25,7 @@ interface EventDetail {
   endDate?: string;
   status: string;
   description?: string;
+  isPublicRegistrationEnabled: boolean;
   community: { name: string; location: string };
   organizer: { name: string };
   letterhead?: {
@@ -62,7 +63,6 @@ export default function EventDetailPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [bgImageBase64, setBgImageBase64] = useState<string | null>(null);
   const [idBgImageBase64, setIdBgImageBase64] = useState<string | null>(null);
-  const [idCardQrCodes, setIdCardQrCodes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -97,6 +97,44 @@ export default function EventDetailPage() {
 
   const canManageEvent = userRole === 'ADMIN' || userRole === 'MANAGER';
   const canRegisterStudents = canManageEvent || isAssignedVolunteer;
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyPublicLink = () => {
+    const url = `${window.location.origin}/public/register/${eventId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    }).catch(() => {
+      // Fallback for browsers that block clipboard without https
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    });
+  };
+
+  const togglePublicRegistration = async () => {
+    if (!event) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublicRegistrationEnabled: !event.isPublicRegistrationEnabled }),
+      });
+      if (res.ok) {
+        setEvent({ ...event, isPublicRegistrationEnabled: !event.isPublicRegistrationEnabled });
+      } else {
+        alert('Failed to toggle public registration');
+      }
+    } catch (error) {
+      console.error('Failed to toggle public registration:', error);
+      alert('Network error. Please try again.');
+    }
+  };
 
   // Registrations tab state
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -107,42 +145,12 @@ export default function EventDetailPage() {
   const [reportEvalScore, setReportEvalScore] = useState(8);
   const [reportEvalGrade, setReportEvalGrade] = useState('A');
   const [reportEvalRemarks, setReportEvalRemarks] = useState('');
+  const [reportEvalMetricScores, setReportEvalMetricScores] = useState<Record<string, number>>({});
   const [reportEvalLoading, setReportEvalLoading] = useState(false);
   const [reportEvalError, setReportEvalError] = useState('');
   const [reportEvalSuccess, setReportEvalSuccess] = useState('');
 
-  useEffect(() => {
-    if (registrations.length === 0) return;
-    const generateAllQrCodes = async () => {
-      try {
-        const QRCodeLib = await import('qrcode');
-        const QRCode = QRCodeLib.default || QRCodeLib;
-        const newQrCodes: Record<string, string> = {};
-        
-        await Promise.all(
-          registrations.map(async (reg) => {
-            if (idCardQrCodes[reg.registrationCode]) return;
-            const dataUrl = await QRCode.toDataURL(reg.registrationCode, {
-              width: 250,
-              margin: 1,
-              color: {
-                dark: '#0a0f2d',
-                light: '#ffffff',
-              },
-            });
-            newQrCodes[reg.registrationCode] = dataUrl;
-          })
-        );
-        
-        if (Object.keys(newQrCodes).length > 0) {
-          setIdCardQrCodes((prev) => ({ ...prev, ...newQrCodes }));
-        }
-      } catch (err) {
-        console.error('Failed to generate QR codes for ID cards:', err);
-      }
-    };
-    generateAllQrCodes();
-  }, [registrations]);
+
   const [regSearch, setRegSearch] = useState('');
   const [regLoading, setRegLoading] = useState(false);
 
@@ -395,23 +403,19 @@ export default function EventDetailPage() {
     return false;
   };
 
-  const openQrModal = (reg: any) => {
+  const openQrModal = async (reg: any) => {
     setSelectedRegForQr(reg);
     setShowQrModal(true);
     setQrCodeDataUrl('');
     
     const scanUrl = `${window.location.origin}/scan/${reg.registrationCode}`;
-    import('qrcode').then((QRCodeLib) => {
-      const QRCode = QRCodeLib.default || QRCodeLib;
-      QRCode.toDataURL(scanUrl, { width: 300, margin: 2 }, (err: any, url: string) => {
-        if (err) console.error(err);
-        if (url) {
-          setQrCodeDataUrl(url);
-        }
-      });
-    }).catch((err) => {
-      console.error('Failed to load qrcode library dynamically', err);
-    });
+    try {
+      const { generateLogoQrCode } = await import('@/lib/qr');
+      const url = await generateLogoQrCode(scanUrl, 300);
+      setQrCodeDataUrl(url);
+    } catch (err) {
+      console.error('Failed to generate QR code with logo', err);
+    }
   };
 
   const openEditModal = (reg: any) => {
@@ -430,6 +434,68 @@ export default function EventDetailPage() {
   };
 
   const [generatingDoc, setGeneratingDoc] = useState<{ id: string; type: 'report-view' | 'report-print' | 'id-view' | 'id-print' } | null>(null);
+
+  const handleBatchDownloadReportCards = async () => {
+    const filteredRegs = registrations.filter(matchesSearch);
+    if (filteredRegs.length === 0) {
+      alert("No registrations available to print.");
+      return;
+    }
+
+    try {
+      setGeneratingDoc({ id: 'batch', type: 'report-print' });
+      // Sort alphabetically by student name
+      const sortedRegistrations = [...filteredRegs].sort((a, b) => 
+        a.student.name.localeCompare(b.student.name)
+      );
+
+      const { pdf, Document } = await import('@react-pdf/renderer');
+      const { ReportCardPage } = await import('@/app/components/ReportCardPdf');
+      
+      const doc = (
+        <Document>
+          {sortedRegistrations.map(reg => (
+            <ReportCardPage 
+              key={reg.id} 
+              registration={{
+                ...reg,
+                event: {
+                  ...event,
+                  stalls: reg.event?.stalls || event?.stalls || []
+                }
+              }} 
+              backgroundImage={bgImageBase64} 
+            />
+          ))}
+        </Document>
+      );
+      
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.top = '-10000px';
+      printFrame.style.left = '-10000px';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.src = url;
+      document.body.appendChild(printFrame);
+      printFrame.onload = () => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+          URL.revokeObjectURL(url);
+        }, 2000);
+      };
+    } catch (error) {
+      console.error("Failed to batch print report cards:", error);
+      alert("Failed to batch print report cards. Please try again.");
+    } finally {
+      setGeneratingDoc(null);
+    }
+  };
 
   const handleViewReportCard = async (reg: any) => {
     const newWindow = window.open('', '_blank');
@@ -477,16 +543,25 @@ export default function EventDetailPage() {
       const doc = <ReportCardPdf registration={fullReg} backgroundImage={bgImageBase64} />;
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ReportCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.top = '-10000px';
+      printFrame.style.left = '-10000px';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.src = url;
+      document.body.appendChild(printFrame);
+      printFrame.onload = () => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
     } catch (error) {
-      console.error("Failed to download report card PDF:", error);
-      alert("Failed to download report card PDF. Please try again.");
+      console.error("Failed to print report card PDF:", error);
+      alert("Failed to print report card PDF. Please try again.");
     } finally {
       setGeneratingDoc(null);
     }
@@ -499,6 +574,9 @@ export default function EventDetailPage() {
     }
     try {
       setGeneratingDoc({ id: reg.id, type: 'id-view' });
+      const { generateLogoQrCode } = await import('@/lib/qr');
+      const qrCodeDataUrl = await generateLogoQrCode(reg.registrationCode, 250);
+
       const { pdf } = await import('@react-pdf/renderer');
       const fullReg = {
         ...reg,
@@ -511,7 +589,7 @@ export default function EventDetailPage() {
         <IdCardPdf 
           registration={fullReg} 
           backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
+          qrCodeDataUrl={qrCodeDataUrl} 
         />
       );
       const blob = await pdf(doc).toBlob();
@@ -533,6 +611,9 @@ export default function EventDetailPage() {
   const handleDownloadIdCard = async (reg: any) => {
     try {
       setGeneratingDoc({ id: reg.id, type: 'id-print' });
+      const { generateLogoQrCode } = await import('@/lib/qr');
+      const qrCodeDataUrl = await generateLogoQrCode(reg.registrationCode, 250);
+
       const { pdf } = await import('@react-pdf/renderer');
       const fullReg = {
         ...reg,
@@ -545,21 +626,30 @@ export default function EventDetailPage() {
         <IdCardPdf 
           registration={fullReg} 
           backgroundImage={idBgImageBase64} 
-          qrCodeDataUrl={idCardQrCodes[reg.registrationCode]} 
+          qrCodeDataUrl={qrCodeDataUrl} 
         />
       );
       const blob = await pdf(doc).toBlob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `IDCard_${reg.student.name.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.top = '-10000px';
+      printFrame.style.left = '-10000px';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.src = url;
+      document.body.appendChild(printFrame);
+      printFrame.onload = () => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
     } catch (error) {
-      console.error("Failed to download ID card PDF:", error);
-      alert("Failed to download ID card PDF. Please try again.");
+      console.error("Failed to print ID card PDF:", error);
+      alert("Failed to print ID card PDF. Please try again.");
     } finally {
       setGeneratingDoc(null);
     }
@@ -1170,7 +1260,7 @@ export default function EventDetailPage() {
       {/* ===== REGISTRATIONS TAB ===== */}
       {activeTab === 'registrations' && (
         <div className="space-y-4">
-          {/* Search + Quick Register */}
+          {/* Search + Quick Register + Copy Public Link */}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1182,6 +1272,36 @@ export default function EventDetailPage() {
                 className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
               />
             </div>
+            {canManageEvent && (
+              <>
+                <button
+                  onClick={togglePublicRegistration}
+                  title={event?.isPublicRegistrationEnabled ? "Disable public registration" : "Enable public registration"}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
+                    event?.isPublicRegistrationEnabled
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                      : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                  }`}
+                >
+                  <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${event?.isPublicRegistrationEnabled ? 'bg-emerald-500' : 'bg-rose-400'}`}>
+                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform ${event?.isPublicRegistrationEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </div>
+                  <span className="hidden sm:inline">{event?.isPublicRegistrationEnabled ? 'Public Reg On' : 'Public Reg Off'}</span>
+                </button>
+                <button
+                  onClick={handleCopyPublicLink}
+                  title="Copy public registration link"
+                  className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
+                    linkCopied
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                  }`}
+                >
+                  {linkCopied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                  <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Public Link'}</span>
+                </button>
+              </>
+            )}
             {canRegisterStudents && (
               <button
                 onClick={openQuickReg}
@@ -1191,6 +1311,15 @@ export default function EventDetailPage() {
                 Quick Register
               </button>
             )}
+            <button
+              onClick={handleBatchDownloadReportCards}
+              disabled={generatingDoc !== null || registrations.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 border border-indigo-100 shrink-0 whitespace-nowrap"
+            >
+              {generatingDoc?.id === 'batch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              <span className="hidden sm:inline">Print All Reports</span>
+              <span className="sm:hidden">Print All</span>
+            </button>
           </div>
 
           {regLoading ? (
@@ -1232,12 +1361,21 @@ export default function EventDetailPage() {
                           {reg.student.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <button 
-                            onClick={() => setSelectedStudentForReport(reg.registrationCode)}
-                            className="text-sm font-bold text-slate-800 truncate hover:text-violet-600 hover:underline transition-colors cursor-pointer text-left block w-full"
-                          >
-                            {reg.student.name}
-                          </button>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <button 
+                              onClick={() => setSelectedStudentForReport(reg.registrationCode)}
+                              className="text-sm font-bold text-slate-800 truncate hover:text-violet-600 hover:underline transition-colors cursor-pointer text-left block"
+                            >
+                              {reg.student.name}
+                            </button>
+                            {reg.registeredBy === 'PUBLIC' || !reg.registeredBy ? (
+                              <span title="Registered via public link" className="flex items-center justify-center bg-sky-50 text-sky-600 border border-sky-200 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">Public</span>
+                            ) : reg.registeredBy === 'VOLUNTEER' ? (
+                              <span title="Registered by Volunteer" className="flex items-center justify-center bg-violet-50 text-violet-600 border border-violet-200 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">Volunteer</span>
+                            ) : (
+                              <span title="Registered by Admin" className="flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-200 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">Admin</span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-slate-400">
                             <span className="font-mono">{reg.student.rollNumber}</span> • Grade {reg.student.grade}
                             {reg.student.age !== undefined && reg.student.age !== null && ` (${reg.student.age} yrs)`}
@@ -1316,10 +1454,10 @@ export default function EventDetailPage() {
                            <span className="w-px h-4 bg-slate-200 mx-1" />
                            <button
                              type="button"
-                             disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCodes[reg.registrationCode]}
+                             disabled={generatingDoc !== null}
                              onClick={() => handleViewIdCard(reg)}
                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors disabled:opacity-50"
-                             title={!idBgImageBase64 || !idCardQrCodes[reg.registrationCode] ? "Preparing ID card assets..." : "View ID Card"}
+                             title="View ID Card"
                            >
                              {generatingDoc?.id === reg.id && generatingDoc?.type === 'id-view' ? (
                                <Loader2 className="w-4 h-4 animate-spin text-violet-600" />
@@ -1329,10 +1467,10 @@ export default function EventDetailPage() {
                            </button>
                            <button
                              type="button"
-                             disabled={generatingDoc !== null || !idBgImageBase64 || !idCardQrCodes[reg.registrationCode]}
+                             disabled={generatingDoc !== null}
                              onClick={() => handleDownloadIdCard(reg)}
                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-orange-600 hover:border-orange-300 hover:bg-orange-50 transition-colors disabled:opacity-50"
-                             title={!idBgImageBase64 || !idCardQrCodes[reg.registrationCode] ? "Preparing ID card assets..." : "Print ID Card"}
+                             title="Print ID Card"
                            >
                              {generatingDoc?.id === reg.id && generatingDoc?.type === 'id-print' ? (
                                <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
@@ -1986,15 +2124,20 @@ export default function EventDetailPage() {
           setReportEvalError('');
           setReportEvalSuccess('');
           try {
+            const currentStall = reg.event?.stalls?.find((s: any) => s.id === reportEvalStall) || visits.find((v: any) => v.stall?.id === reportEvalStall)?.stall;
+            const hasMetrics = currentStall?.metrics && Array.isArray(currentStall.metrics) && currentStall.metrics.length > 0;
+            const bodyPayload = {
+              stallId: reportEvalStall,
+              remarks: reportEvalRemarks,
+              ...(hasMetrics 
+                ? { metricScores: reportEvalMetricScores } 
+                : { score: Number(reportEvalScore), grade: reportEvalGrade })
+            };
+
             const res = await fetch(`/api/scan/${reg.registrationCode}/rate`, {
               method: reportEvalMode === 'edit' ? 'PATCH' : 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                stallId: reportEvalStall,
-                score: Number(reportEvalScore),
-                grade: reportEvalGrade,
-                remarks: reportEvalRemarks
-              })
+              body: JSON.stringify(bodyPayload)
             });
             const data = await res.json();
             if (!res.ok) {
@@ -2022,17 +2165,18 @@ export default function EventDetailPage() {
 
         return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-hidden flex flex-col relative animate-fade-in border border-slate-700/20">
+          <div className="bg-white/95 dark:bg-slate-900/95 shadow-2xl rounded-3xl w-full max-w-xl max-h-[85vh] overflow-hidden flex flex-col relative animate-fade-in border border-slate-200/80">
             {/* Header */}
-            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-4 shrink-0">
+            <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 px-6 py-5 shrink-0 border-b border-white/10 shadow-lg">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-white text-lg font-extrabold shrink-0">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-500 to-indigo-500 border border-white/20 flex items-center justify-center text-white text-xl font-bold shrink-0 shadow-md">
                     {reg.student.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
-                    <h2 className="text-sm font-extrabold text-white truncate">{reg.student.name}</h2>
-                    <p className="text-[10px] text-violet-200 font-semibold font-mono mt-0.5">
+                    <span className="text-[9px] font-extrabold tracking-widest text-indigo-300 uppercase bg-indigo-950/60 px-2.5 py-0.5 rounded-full border border-indigo-800/40">Student Profile</span>
+                    <h2 className="text-base font-bold text-white truncate mt-1">{reg.student.name}</h2>
+                    <p className="text-[10px] text-indigo-200 font-semibold font-mono mt-0.5">
                       {reg.student.rollNumber} • Grade {reg.student.grade}
                       {reg.student.age !== undefined && reg.student.age !== null && ` (${reg.student.age} yrs)`}
                     </p>
@@ -2040,7 +2184,7 @@ export default function EventDetailPage() {
                 </div>
                 <button
                   onClick={() => { setSelectedStudentForReport(null); setReportEvalStall(null); setReportEvalError(''); setReportEvalSuccess(''); }}
-                  className="p-1.5 rounded-lg text-violet-200 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                  className="p-2 rounded-xl text-indigo-200 hover:text-white hover:bg-white/10 transition-all active:scale-95 shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2048,74 +2192,140 @@ export default function EventDetailPage() {
             </div>
 
             {/* Stats row */}
-            <div className="grid grid-cols-3 gap-2 px-5 py-3 bg-white border-b border-slate-100 shrink-0">
+            <div className="grid grid-cols-3 gap-3 px-6 py-4.5 bg-slate-50/50 border-b border-slate-100 shrink-0">
               {[
-                { label: 'Stalls', value: `${visitedCount} / ${totalStalls}`, color: 'text-violet-600' },
-                { label: 'Avg Score', value: `${avgScore} / 10`, color: 'text-amber-600' },
-                { label: 'Status', value: reg.status === 'COMPLETED' ? 'Completed' : reg.status === 'IN_PROGRESS' ? 'In Progress' : 'Registered', color: 'text-emerald-600' },
+                { 
+                  label: 'Stalls Visited', 
+                  value: `${visitedCount} / ${totalStalls}`, 
+                  color: 'text-indigo-600 bg-white border border-indigo-100 shadow-[0_2px_8px_rgba(99,102,241,0.04)]',
+                  icon: <ShoppingBag className="w-4 h-4 text-indigo-500" />
+                },
+                { 
+                  label: 'Avg Score', 
+                  value: `${avgScore} / 10`, 
+                  color: 'text-amber-600 bg-white border border-amber-100 shadow-[0_2px_8px_rgba(245,158,11,0.04)]',
+                  icon: <Award className="w-4 h-4 text-amber-500" />
+                },
+                { 
+                  label: 'Status', 
+                  value: reg.status === 'COMPLETED' ? 'Completed' : reg.status === 'IN_PROGRESS' ? 'In Progress' : 'Registered', 
+                  color: reg.status === 'COMPLETED' 
+                    ? 'text-emerald-700 bg-white border border-emerald-100 shadow-[0_2px_8px_rgba(16,185,129,0.04)]' 
+                    : reg.status === 'IN_PROGRESS' 
+                      ? 'text-blue-700 bg-white border border-blue-100 shadow-[0_2px_8px_rgba(59,130,246,0.04)]' 
+                      : 'text-slate-500 bg-white border border-slate-200 shadow-[0_2px_8px_rgba(100,116,139,0.02)]',
+                  icon: reg.status === 'COMPLETED' 
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> 
+                    : reg.status === 'IN_PROGRESS' 
+                      ? <Clock className="w-4 h-4 text-blue-500" /> 
+                      : <Users className="w-4 h-4 text-slate-400" />
+                },
               ].map(s => (
-                <div key={s.label} className="text-center">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
-                  <p className={`text-xs font-extrabold ${s.color} mt-0.5`}>{s.value}</p>
+                <div 
+                  key={s.label} 
+                  className={`flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${s.color.split(' ').slice(1).join(' ')}`}
+                >
+                  <div className="p-2 bg-slate-50 rounded-xl shrink-0 border border-slate-100 shadow-inner">
+                    {s.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">{s.label}</p>
+                    <p className={`text-sm font-extrabold ${s.color.split(' ')[0]} mt-1`}>{s.value}</p>
+                  </div>
                 </div>
               ))}
             </div>
 
             {/* Stall cards — scrollable */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Activity Stalls</p>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Activity Stalls & Evaluations</p>
+                <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100">
+                  {visitedCount} of {totalStalls} Evaluated
+                </span>
+              </div>
+              
               {(event?.stalls || []).map((stall: any) => {
                 const visit = visits.find((v: any) => v.stall?.id === stall.id);
                 const perf = visit?.performance;
                 const isEvaluating = reportEvalStall === stall.id;
 
                 return (
-                  <div key={stall.id} className={`rounded-xl border overflow-hidden transition-all ${
+                  <div key={stall.id} className={`rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-md hover:border-indigo-100 ${
                     perf
-                      ? 'bg-white border-emerald-200/80 shadow-sm'
+                      ? 'bg-white border-emerald-100 shadow-sm'
                       : 'bg-white border-slate-200/80 shadow-sm'
                   }`}>
                     {/* Stall card header */}
-                    <div className={`px-4 py-3 flex items-center justify-between gap-3 ${
-                      perf ? 'bg-emerald-50/60' : 'bg-slate-50/60'
+                    <div className={`px-5 py-3.5 flex items-center justify-between gap-3 ${
+                      perf ? 'bg-emerald-50/15' : 'bg-slate-50/30'
                     }`}>
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
                           perf
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'bg-slate-100 text-slate-400'
+                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600 shadow-sm'
+                            : 'bg-amber-50/50 border-amber-100/50 text-amber-500/80 shadow-sm animate-pulse'
                         }`}>
-                          {perf ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                          {perf ? <CheckCircle2 className="w-4.5 h-4.5" /> : <Clock className="w-4.5 h-4.5" />}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800 truncate">{stall.name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono uppercase">{stall.code}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold font-mono uppercase tracking-wide leading-none mt-1">{stall.code}</p>
                         </div>
                       </div>
 
                       {perf ? (
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] font-extrabold text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-lg font-mono">{perf.score}/10</span>
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">Grade {perf.grade}</span>
-                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Evaluated</span>
+                          <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-lg font-mono">
+                            {perf.score}/10
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-lg">
+                            Grade {perf.grade}
+                          </span>
                         </div>
                       ) : (
-                        <span className="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">Pending</span>
+                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                          Pending
+                        </span>
                       )}
                     </div>
 
+                    {/* Evaluated Metrics details (if rated and not currently in edit mode) */}
+                    {perf && !isEvaluating && perf.metricScores && Object.keys(perf.metricScores).length > 0 && (
+                      <div className="px-5 py-3.5 bg-slate-50/40 border-t border-slate-100 grid grid-cols-2 gap-x-5 gap-y-2">
+                        {Object.entries(perf.metricScores).map(([m, val]: [string, any]) => (
+                          <div key={m} className="flex items-center justify-between text-xs py-0.5 border-b border-dashed border-slate-100">
+                            <span className="truncate pr-2 font-semibold text-slate-500">{m}</span>
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`w-3.5 h-3.5 ${
+                                    star <= Number(val)
+                                      ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_2px_rgba(245,158,11,0.15)]'
+                                      : 'text-slate-200'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Remarks (if evaluated and not in edit mode) */}
                     {perf && !isEvaluating && perf.remarks && (
-                      <div className="px-4 py-2 border-t border-emerald-100">
-                        <p className="text-[11px] text-slate-500 italic">"{perf.remarks}"</p>
+                      <div className="px-5 py-2.5 border-t border-slate-100 bg-white">
+                        <p className="text-[11px] text-slate-500 italic">Remarks: "{perf.remarks}"</p>
                       </div>
                     )}
 
                     {/* Action buttons */}
                     {!isEvaluating && (
-                      <div className="px-4 py-2.5 border-t border-slate-100 flex items-center justify-end gap-2">
+                      <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end bg-slate-50/30">
                         {perf ? (
-                          // Edit button — admin only
+                          // Edit button — admin/manager only
                           canManageEvent && (
                             <button
                               onClick={() => {
@@ -2124,13 +2334,24 @@ export default function EventDetailPage() {
                                 setReportEvalScore(perf.score);
                                 setReportEvalGrade(perf.grade);
                                 setReportEvalRemarks(perf.remarks || '');
+                                
+                                // Load existing metric scores
+                                const initialScores: Record<string, number> = {};
+                                const existingScores = perf.metricScores || {};
+                                const metricsList = stall.metrics || visit?.stall?.metrics || [];
+                                if (Array.isArray(metricsList)) {
+                                  metricsList.forEach((m: string) => {
+                                    initialScores[m] = existingScores[m] !== undefined ? Number(existingScores[m]) : 5;
+                                  });
+                                }
+                                setReportEvalMetricScores(initialScores);
                                 setReportEvalError('');
                                 setReportEvalSuccess('');
                               }}
-                              className="flex items-center gap-1.5 text-[11px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg border border-violet-100 transition-colors"
+                              className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-white hover:bg-indigo-600 bg-indigo-50 px-3.5 py-1.5 rounded-xl border border-indigo-100 transition-all active:scale-95 duration-200 shadow-sm cursor-pointer"
                             >
-                              <Pencil className="w-3 h-3" />
-                              Edit Evaluation
+                              <Pencil className="w-3.5 h-3.5" />
+                              Edit Scores
                             </button>
                           )
                         ) : (
@@ -2142,13 +2363,23 @@ export default function EventDetailPage() {
                               setReportEvalScore(8);
                               setReportEvalGrade('A');
                               setReportEvalRemarks('');
+                              
+                              // Load default metric scores
+                              const defaultScores: Record<string, number> = {};
+                              const metricsList = stall.metrics || visit?.stall?.metrics || [];
+                              if (Array.isArray(metricsList)) {
+                                metricsList.forEach((m: string) => {
+                                  defaultScores[m] = 5;
+                                });
+                              }
+                              setReportEvalMetricScores(defaultScores);
                               setReportEvalError('');
                               setReportEvalSuccess('');
                             }}
-                            className="flex items-center gap-1.5 text-[11px] font-bold text-white bg-violet-600 hover:bg-violet-700 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                            className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 px-4 py-2 rounded-xl transition-all shadow-md active:scale-95 duration-200 hover:shadow-indigo-500/20 cursor-pointer"
                           >
-                            <Star className="w-3 h-3" />
-                            Evaluate
+                            <Star className="w-3.5 h-3.5" />
+                            Evaluate Stalls
                           </button>
                         )}
                       </div>
@@ -2156,83 +2387,171 @@ export default function EventDetailPage() {
 
                     {/* Inline evaluation form */}
                     {isEvaluating && (
-                      <div className="px-4 py-4 border-t border-violet-100 bg-violet-50/30 space-y-3">
+                      <div className="px-5 py-4 border-t border-indigo-100 bg-indigo-50/20 space-y-4">
                         {reportEvalError && (
-                          <div className="flex items-center gap-2 bg-rose-50 border border-rose-100 text-rose-700 rounded-lg px-3 py-2 text-[11px] font-semibold">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <div className="flex items-center gap-2 bg-rose-50 border border-rose-100 text-rose-700 rounded-xl px-3.5 py-2.5 text-xs font-bold shadow-sm">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
                             {reportEvalError}
                           </div>
                         )}
                         {reportEvalSuccess && (
-                          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-3 py-2 text-[11px] font-semibold">
-                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-3.5 py-2.5 text-xs font-bold shadow-sm">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
                             {reportEvalSuccess}
                           </div>
                         )}
 
-                        {/* Score slider */}
-                        <div>
-                          <div className="flex justify-between items-center mb-1.5">
-                            <label className="text-[11px] font-bold text-slate-700">Score</label>
-                            <span className="text-xs font-extrabold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-lg border border-violet-100 font-mono">{reportEvalScore} / 10</span>
-                          </div>
-                          <input
-                            type="range" min="1" max="10" step="0.5"
-                            value={reportEvalScore}
-                            onChange={e => { setReportEvalScore(Number(e.target.value)); setReportEvalError(''); setReportEvalSuccess(''); }}
-                            className="w-full accent-violet-600 h-2 bg-slate-100 rounded-lg cursor-pointer appearance-none"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 font-bold mt-1 px-0.5">
-                            <span>1 (Poor)</span><span>5 (Avg)</span><span>10 (Best)</span>
-                          </div>
-                        </div>
+                        {(() => {
+                          const metricsList = stall.metrics || visit?.stall?.metrics || [];
+                          const hasMetrics = Array.isArray(metricsList) && metricsList.length > 0;
 
-                        {/* Grade dropdown */}
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-700 block mb-1">Grade</label>
-                          <select
-                            value={reportEvalGrade}
-                            onChange={e => { setReportEvalGrade(e.target.value); setReportEvalError(''); setReportEvalSuccess(''); }}
-                            className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800 font-semibold"
-                          >
-                            <option value="A+">A+ (Outstanding)</option>
-                            <option value="A">A (Excellent)</option>
-                            <option value="B">B (Good)</option>
-                            <option value="C">C (Satisfactory)</option>
-                            <option value="D">D (Needs Improvement)</option>
-                            <option value="E">E (Unsatisfactory)</option>
-                          </select>
-                        </div>
+                          if (hasMetrics) {
+                            // Calculate live score/grade to show admin in real time
+                            const ratings = Object.values(reportEvalMetricScores);
+                            const avgStars = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 5;
+                            const liveScore = Math.round(avgStars * 2 * 10) / 10;
+                            let liveGrade = 'E';
+                            if (liveScore >= 9) liveGrade = 'A+';
+                            else if (liveScore >= 8) liveGrade = 'A';
+                            else if (liveScore >= 7) liveGrade = 'B';
+                            else if (liveScore >= 6) liveGrade = 'C';
+                            else if (liveScore >= 5) liveGrade = 'D';
+
+                            return (
+                              <div className="space-y-3">
+                                <div className="bg-white border border-indigo-100 rounded-2xl p-4 shadow-sm space-y-4">
+                                  <div className="flex justify-between items-center pb-2.5 border-b border-indigo-50">
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Metrics Evaluation</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-100 font-mono shadow-sm">
+                                        Derived: {liveScore}/10
+                                      </span>
+                                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-100 shadow-sm">
+                                        Grade {liveGrade}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="divide-y divide-slate-100">
+                                    {metricsList.map((metric: string) => {
+                                      const currentRating = reportEvalMetricScores[metric] || 5;
+                                      return (
+                                        <div key={metric} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                                          <div className="min-w-0 pr-4">
+                                            <span className="text-xs font-extrabold text-slate-700 block truncate" title={metric}>{metric}</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">Rate student's performance</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                                            {[1, 2, 3, 4, 5].map((star) => (
+                                              <button
+                                                key={star}
+                                                type="button"
+                                                onClick={() => {
+                                                  setReportEvalMetricScores(prev => ({
+                                                    ...prev,
+                                                    [metric]: star
+                                                  }));
+                                                  setReportEvalError('');
+                                                  setReportEvalSuccess('');
+                                                }}
+                                                className="focus:outline-none transition-all hover:scale-110 active:scale-95 p-0.5"
+                                              >
+                                                <Star
+                                                  className={`w-5 h-5 transition-colors duration-150 ${
+                                                    star <= currentRating
+                                                      ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_3px_rgba(245,158,11,0.25)]'
+                                                      : 'text-slate-300 hover:text-slate-400'
+                                                  }`}
+                                                />
+                                              </button>
+                                            ))}
+                                            <span className="text-xs font-extrabold text-slate-600 min-w-[20px] text-center font-mono ml-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{currentRating}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Fallback to old rating inputs if no metrics exist
+                          return (
+                            <div className="bg-white border border-violet-100 rounded-2xl p-4 shadow-sm space-y-4">
+                              {/* Score slider */}
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <label className="text-xs font-bold text-slate-700 block">Evaluation Score</label>
+                                    <span className="text-[10px] text-slate-400 font-medium">Select a score from 1 to 10</span>
+                                  </div>
+                                  <span className="text-sm font-extrabold text-violet-700 bg-violet-50 px-3 py-1 rounded-xl border border-violet-100 font-mono shadow-sm">
+                                    {reportEvalScore} / 10
+                                  </span>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                  <input
+                                    type="range" min="1" max="10" step="0.5"
+                                    value={reportEvalScore}
+                                    onChange={e => { setReportEvalScore(Number(e.target.value)); setReportEvalError(''); setReportEvalSuccess(''); }}
+                                    className="w-full accent-violet-600 h-2 bg-slate-200 rounded-lg cursor-pointer appearance-none"
+                                  />
+                                  <div className="flex justify-between text-[9px] text-slate-400 font-extrabold mt-2 px-0.5">
+                                    <span>1 (Poor)</span><span>5 (Avg)</span><span>10 (Best)</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Grade dropdown */}
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-700 block">Performance Grade</label>
+                                <select
+                                  value={reportEvalGrade}
+                                  onChange={e => { setReportEvalGrade(e.target.value); setReportEvalError(''); setReportEvalSuccess(''); }}
+                                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800 font-bold transition-all shadow-sm"
+                                >
+                                  <option value="A+">A+ (Outstanding)</option>
+                                  <option value="A">A (Excellent)</option>
+                                  <option value="B">B (Good)</option>
+                                  <option value="C">C (Satisfactory)</option>
+                                  <option value="D">D (Needs Improvement)</option>
+                                  <option value="E">E (Unsatisfactory)</option>
+                                </select>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Remarks */}
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-700 block mb-1">Remarks <span className="font-normal text-slate-400">(optional)</span></label>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 block">Remarks <span className="font-normal text-slate-400">(optional)</span></label>
                           <textarea
                             rows={2}
                             value={reportEvalRemarks}
                             onChange={e => { setReportEvalRemarks(e.target.value); setReportEvalError(''); setReportEvalSuccess(''); }}
                             placeholder="e.g. Great creativity, quick learner..."
-                            className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-slate-800 placeholder:text-slate-400"
+                            className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 placeholder:text-slate-400 font-medium transition-all shadow-sm resize-none"
                           />
                         </div>
 
                         {/* Actions */}
-                        <div className="flex gap-2">
+                        <div className="flex gap-3 pt-2">
                           <button
                             onClick={() => { setReportEvalStall(null); setReportEvalError(''); setReportEvalSuccess(''); }}
-                            className="flex-1 px-3 py-2 text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                            className="flex-1 px-4 py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={handleEvalSubmit}
                             disabled={reportEvalLoading}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 transition-all active:scale-95 rounded-xl shadow-md cursor-pointer"
                           >
                             {reportEvalLoading ? (
-                              <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+                              <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
                             ) : (
-                              <><Send className="w-3 h-3" /> {reportEvalMode === 'edit' ? 'Update' : 'Submit'}</>
+                              <><Send className="w-3.5 h-3.5" /> {reportEvalMode === 'edit' ? 'Update Scores' : 'Submit Evaluation'}</>
                             )}
                           </button>
                         </div>

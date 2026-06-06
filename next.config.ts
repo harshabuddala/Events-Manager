@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  transpilePackages: ['motion'],
+  transpilePackages: ['motion', 'recharts'],
   async headers() {
     return [
       {

@@ -179,7 +179,7 @@ interface ReportCardPdfProps {
   backgroundImage?: string | null;
 }
 
-export const ReportCardPdf = ({ registration, backgroundImage }: ReportCardPdfProps) => {
+export const ReportCardPage = ({ registration, backgroundImage }: ReportCardPdfProps) => {
   const { student, event, stallVisits = [] } = registration;
   const stalls = event?.stalls || [];
   
@@ -199,9 +199,9 @@ export const ReportCardPdf = ({ registration, backgroundImage }: ReportCardPdfPr
     return {
       stallName: stall.name,
       metricsList: metricsStringList,
-      remarks: perf?.remarks || (perf ? 'Evaluated successfully.' : ''),
-      score: perf ? perf.score.toFixed(1) : 'Pending',
-      grade: perf ? perf.grade : '—',
+      remarks: perf?.remarks || (perf ? 'Evaluated successfully.' : 'Did not visit'),
+      score: perf ? perf.score.toFixed(1) : 'N/A',
+      grade: perf ? perf.grade : 'N/A',
     };
   });
 
@@ -233,8 +233,7 @@ export const ReportCardPdf = ({ registration, backgroundImage }: ReportCardPdfPr
     : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
-    <Document>
-      <Page size="A4" style={styles.page}>
+    <Page size="A4" style={styles.page}>
         <Image 
           fixed 
           style={styles.background} 
@@ -306,7 +305,7 @@ export const ReportCardPdf = ({ registration, backgroundImage }: ReportCardPdfPr
                 )}
               </View>
               <Text style={[styles.colScore, { fontFamily: 'Helvetica-Bold', color: '#0a0f2d' }]}>{v.score}</Text>
-              <Text style={[styles.colGrade, { fontFamily: 'Helvetica-Bold', color: v.score === 'Pending' ? '#94a3b8' : '#10b981' }]}>{v.grade}</Text>
+              <Text style={[styles.colGrade, { fontFamily: 'Helvetica-Bold', color: v.score === 'N/A' ? '#94a3b8' : '#10b981' }]}>{v.grade}</Text>
             </View>
           ))}
 
@@ -327,6 +326,11 @@ export const ReportCardPdf = ({ registration, backgroundImage }: ReportCardPdfPr
           </View>
         </View>
       </Page>
-    </Document>
   );
 };
+
+export const ReportCardPdf = (props: ReportCardPdfProps) => (
+  <Document>
+    <ReportCardPage {...props} />
+  </Document>
+);

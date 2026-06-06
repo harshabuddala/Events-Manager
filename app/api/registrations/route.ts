@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         },
         stallVisits: {
           include: {
-            stall: { select: { id: true, name: true } },
+            stall: { select: { id: true, name: true, metrics: true } },
             performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
           },
         },
