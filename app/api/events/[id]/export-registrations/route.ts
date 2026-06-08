@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import xlsx from 'xlsx'
+import * as XLSX from 'xlsx'
 
 export async function GET(
   request: NextRequest,
@@ -99,7 +99,7 @@ export async function GET(
       reg.student?.parentPhone || '',
     ])
 
-    const regSheet = xlsx.utils.aoa_to_sheet([regHeaders, ...regRows])
+    const regSheet = XLSX.utils.aoa_to_sheet([regHeaders, ...regRows])
 
     // Sheet 2: Stall Visits
     const visitHeaders = [
@@ -137,14 +137,14 @@ export async function GET(
       }
     }
 
-    const visitSheet = xlsx.utils.aoa_to_sheet([visitHeaders, ...visitRows])
+    const visitSheet = XLSX.utils.aoa_to_sheet([visitHeaders, ...visitRows])
 
     // Create workbook
-    const workbook = xlsx.utils.book_new()
-    xlsx.utils.book_append_sheet(workbook, regSheet, 'Registrations')
-    xlsx.utils.book_append_sheet(workbook, visitSheet, 'Stall Visits')
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, regSheet, 'Registrations')
+    XLSX.utils.book_append_sheet(workbook, visitSheet, 'Stall Visits')
 
-    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
 
     const safeName = event.name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)
     const filename = `${safeName}_registrations.xlsx`
