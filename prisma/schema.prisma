@@ -162,6 +162,9 @@ model Registration {
   stallVisits StallVisit[]
 
   @@unique([eventId, studentId])
+  @@index([eventId])
+  @@index([studentId])
+  @@index([status])
   @@map("registrations")
 }
 
@@ -204,6 +207,7 @@ model Volunteer {
   assignments  VolunteerAssignment[]
   performances Performance[]
 
+  @@index([status])
   @@map("volunteers")
 }
 
@@ -242,6 +246,8 @@ model StallVisit {
   performance  Performance?
 
   @@unique([registrationId, stallId])
+  @@index([registrationId])
+  @@index([studentId])
   @@map("stall_visits")
 }
 
@@ -265,6 +271,8 @@ model Performance {
   stallVisit StallVisit @relation(fields: [stallVisitId], references: [id], onDelete: Cascade)
   volunteer  Volunteer  @relation(fields: [volunteerId], references: [id])
 
+  @@index([volunteerId])
+  @@index([createdAt])
   @@map("performances")
 }
 
@@ -291,4 +299,28 @@ model RateLimiterFlexible {
   expire DateTime?
 
   @@map("rate_limiter")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  key        String    @unique
+  name       String
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("api_keys")
+}
+
+model WhatsAppConfig {
+  id                 String   @id @default(uuid())
+  phoneNumberId      String
+  accessToken        String
+  apiVersion         String   @default("v18.0")
+  businessAccountId  String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("whatsapp_config")
 }

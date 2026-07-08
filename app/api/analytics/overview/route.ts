@@ -9,63 +9,60 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const totalVisits = await prisma.stallVisit.count()
-    const completedVisits = await prisma.stallVisit.count({
-      where: { completedAt: { not: null } },
-    })
+    const [totalVisits, completedVisits, activeStalls, communities] = await Promise.all([
+      prisma.stallVisit.count(),
+      prisma.stallVisit.count({ where: { completedAt: { not: null } } }),
+      prisma.stall.count({ where: { status: 'ACTIVE' } }),
+      prisma.community.count(),
+    ])
+
     const avgCompletion = totalVisits > 0
       ? Math.round((completedVisits / totalVisits) * 100 * 10) / 10
       : 0
-    const activeStalls = await prisma.stall.count({ where: { status: 'ACTIVE' } })
-    const communities = await prisma.community.count()
 
-    const visits = await prisma.stallVisit.findMany({
-      select: { visitedAt: true },
-      orderBy: { visitedAt: 'asc' },
-    })
+    const visitTrendsRaw = await prisma.$queryRaw<{ date: string; count: bigint }[]>`
+      SELECT TO_CHAR("visitedAt"::date, 'YYYY-MM-DD') as date, COUNT(*)::bigint as count
+      FROM stall_visits
+      GROUP BY "visitedAt"::date
+      ORDER BY "visitedAt"::date ASC
+    `
 
-    const visitMap = new Map<string, number>()
-    visits.forEach(v => {
-      const date = v.visitedAt.toISOString().split('T')[0]
-      visitMap.set(date, (visitMap.get(date) || 0) + 1)
-    })
-    const visitTrends = Array.from(visitMap.entries()).map(([date, count]) => ({
-      time: date.slice(5),
-      visits: count,
+    const visitTrends = visitTrendsRaw.map(row => ({
+      time: row.date.slice(5),
+      visits: Number(row.count),
     }))
 
-    const performances = await prisma.performance.findMany({
-      include: {
-        stallVisit: {
-          include: {
-            student: { select: { grade: true } },
-          },
-        },
-      },
-    })
+    const performanceByGradeRaw = await prisma.$queryRaw<{
+      grade: string
+      avg_creativity: number | null
+      avg_problem_solving: number | null
+      avg_communication: number | null
+      avg_learning_ability: number | null
+    }[]>`
+      SELECT 
+        s.grade,
+        ROUND(AVG(p.creativity)::numeric, 1) as avg_creativity,
+        ROUND(AVG(p."problemSolving")::numeric, 1) as avg_problem_solving,
+        ROUND(AVG(p.communication)::numeric, 1) as avg_communication,
+        ROUND(AVG(p."learningAbility")::numeric, 1) as avg_learning_ability
+      FROM performances p
+      INNER JOIN stall_visits sv ON sv.id = p."stallVisitId"
+      INNER JOIN students s ON s.id = sv."studentId"
+      WHERE p.creativity IS NOT NULL
+         OR p."problemSolving" IS NOT NULL
+         OR p.communication IS NOT NULL
+         OR p."learningAbility" IS NOT NULL
+      GROUP BY s.grade
+      ORDER BY s.grade ASC
+    `
 
-    const gradeMap = new Map<string, { creativity: number[]; problemSolving: number[]; communication: number[]; learningAbility: number[] }>()
-    performances.forEach(p => {
-      const grade = p.stallVisit.student.grade || 'Unknown'
-      if (!gradeMap.has(grade)) {
-        gradeMap.set(grade, { creativity: [], problemSolving: [], communication: [], learningAbility: [] })
-      }
-      const g = gradeMap.get(grade)!
-      if (p.creativity != null) g.creativity.push(p.creativity)
-      if (p.problemSolving != null) g.problemSolving.push(p.problemSolving)
-      if (p.communication != null) g.communication.push(p.communication)
-      if (p.learningAbility != null) g.learningAbility.push(p.learningAbility)
-    })
-
-    const avg = (arr: number[]) => arr.length > 0 ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : 0
-
-    const performanceByGrade = Array.from(gradeMap.entries()).map(([grade, vals]) => ({
-      grade: grade.replace(' Class', ''),
-      creativity: avg(vals.creativity),
-      problemSolving: avg(vals.problemSolving),
-      communication: avg(vals.communication),
-      learningAbility: avg(vals.learningAbility),
-    })).sort((a, b) => a.grade.localeCompare(b.grade))
+    const performanceByGrade = performanceByGradeRaw.map(row => ({
+      grade: row.grade.replace(' Class', ''),
+      creativity: row.avg_creativity ?? 0,
+      problemSolving: row.avg_problem_solving ?? 0,
+      communication: row.avg_communication ?? 0,
+      learningAbility: row.avg_learning_ability ?? 0,
+    }))
 
     return NextResponse.json({
       stats: { totalVisits, avgCompletion, activeStalls, communities },

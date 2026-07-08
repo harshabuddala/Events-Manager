@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 
 const publicPaths = ['/']
-const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/auto-login', '/_next/', '/favicon.ico', '/api/scan', '/scan', '/r', '/public', '/api/public']
+const publicPrefixes = ['/api/auth/login', '/api/auth/qr-login', '/api/auth/clear-session', '/api/volunteer/login', '/api/health', '/auto-login', '/_next/', '/favicon.ico', '/api/scan', '/scan', '/r', '/public', '/api/public', '/api/v1']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -24,10 +24,10 @@ export async function middleware(request: NextRequest) {
 
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data:",
-    "font-src 'self' data:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://unpkg.com",
+    "style-src 'self' 'unsafe-inline' https://unpkg.com",
+    "img-src 'self' blob: data: https://unpkg.com",
+    "font-src 'self' data: https://unpkg.com",
     "connect-src 'self' https:",
     "frame-ancestors 'self'",
     "base-uri 'self'",

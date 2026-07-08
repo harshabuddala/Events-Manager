@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { PrismaClient } from '../generated/prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { hash } from 'bcryptjs'
-import { randomBytes } from 'crypto'
+import { randomBytes, createHash } from 'crypto'
 import { Pool } from 'pg'
 
 // Inline so seed.ts is self-contained (Docker container path resolution)
@@ -45,6 +45,7 @@ async function main() {
     await prisma.event.deleteMany()
     await prisma.community.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.apiKey.deleteMany()
     console.log('Cleaned existing data')
   } else if (hasNewStalls) {
     console.log('New stalls already present. Skipping seed.')
@@ -150,6 +151,26 @@ async function main() {
     )
   )
   console.log(`Created/Upserted ${stalls.length} stalls`)
+
+  // ── Default API Key ──────────────────────────────────────────────────────
+  const rawKey = randomBytes(32).toString('hex')
+  const hashedKey = createHash('sha256').update(rawKey).digest('hex')
+
+  const existingKey = await prisma.apiKey.findFirst({ where: { name: 'Default API Key' } })
+  if (!existingKey) {
+    await prisma.apiKey.create({
+      data: { key: hashedKey, name: 'Default API Key', isActive: true },
+    })
+    console.log('')
+    console.log('========================================')
+    console.log('  DEFAULT API KEY')
+    console.log('  (save this — shown only once!)')
+    console.log(`  ${rawKey}`)
+    console.log('========================================')
+    console.log('')
+  } else {
+    console.log('Default API key already exists, skipping.')
+  }
 
   console.log('Database seeding completed!')
 }

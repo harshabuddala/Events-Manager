@@ -358,7 +358,7 @@ function AdminDashboard() {
   );
 }
 
-function KpiCard({
+const KpiCard = React.memo(function KpiCard({
   icon: Icon,
   label,
   value,
@@ -389,7 +389,7 @@ function KpiCard({
       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
     </div>
   );
-}
+});
 
 /* ================================================
    MAIN DASHBOARD PAGE — Role-based routing

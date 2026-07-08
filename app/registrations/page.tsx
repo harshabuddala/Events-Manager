@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { 
   Users, Search, Filter, Trash2, ArrowRight, Printer, 
   CheckCircle2, Clock, MapPin, Target, FileText, QrCode, Loader2, X, Eye, IdCard,
-  Star, Pencil, Award, ShoppingBag, Send, AlertCircle
+  Star, Pencil, Award, ShoppingBag, Send, AlertCircle, MessageCircle
 } from 'lucide-react';
 import { fetchReportCardImageBase64 } from '@/lib/letterheads';
 import { fetchIdCardImageBase64 } from '@/lib/letterheads';
+import { useAuth } from '@/hooks/useAuth';
+import WhatsAppSendButton from '@/app/components/WhatsAppSendButton';
+import ActionDropdown from '@/app/components/ActionDropdown';
 // ReportCardPdf and IdCardPdf are loaded dynamically inside the PDF generation
 // handlers to keep @react-pdf/renderer out of the initial client bundle.
 
@@ -55,15 +58,21 @@ interface Registration {
 
 export default function RegistrationsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [userRole, setUserRole] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [qrModal, setQrModal] = useState<{ code: string; dataUrl: string } | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Registration | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_LIMIT = 50;
   
   // Student report modal — inline evaluate/edit state
   const [reportEvalStall, setReportEvalStall] = useState<string | null>(null); // stallId being evaluated
@@ -76,49 +85,58 @@ export default function RegistrationsPage() {
   const [reportEvalError, setReportEvalError] = useState<string>('');
   const [reportEvalSuccess, setReportEvalSuccess] = useState<string>('');
 
-  const canManage = userRole === 'ADMIN' || userRole === 'MANAGER';
+  const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
-  const fetchRegistrations = useCallback(async () => {
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => setDebouncedSearch(value), 300);
+  }, []);
+
+  const fetchRegistrations = useCallback(async (p: number) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'ALL') params.set('status', statusFilter);
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      params.set('page', String(p));
+      params.set('limit', String(PAGE_LIMIT));
 
       const res = await fetch(`/api/registrations?${params}`);
       if (res.ok) {
         const data = await res.json();
         setRegistrations(data.registrations || []);
+        setTotalPages(data.pagination?.totalPages || 1);
+        setTotal(data.pagination?.total || 0);
       }
     } catch (err) {
       console.error('Failed to fetch registrations:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, debouncedSearch]);
 
   const [bgImageBase64, setBgImageBase64] = useState<string | null>(null);
   const [idBgImageBase64, setIdBgImageBase64] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
-    fetch('/api/auth/me')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data?.user) setUserRole(data.user.role); })
-      .catch(() => {});
-    
-    fetchReportCardImageBase64().then((base64) => {
-      setBgImageBase64(base64);
-    }).catch(console.error);
-
-    fetchIdCardImageBase64().then((base64) => {
-      setIdBgImageBase64(base64);
-    }).catch(console.error);
+    Promise.all([
+      fetchReportCardImageBase64().catch(() => null),
+      fetchIdCardImageBase64().catch(() => null),
+    ]).then(([reportCard, idCard]) => {
+      if (reportCard) setBgImageBase64(reportCard);
+      if (idCard) setIdBgImageBase64(idCard);
+    });
   }, []);
 
   useEffect(() => {
-    fetchRegistrations();
-  }, [fetchRegistrations]);
+    setPage(1);
+  }, [statusFilter, debouncedSearch]);
+
+  useEffect(() => {
+    fetchRegistrations(page);
+  }, [fetchRegistrations, page]);
 
   const [generatingDoc, setGeneratingDoc] = useState<{ id: string; type: 'report-view' | 'report-print' | 'id-view' | 'id-print' } | null>(null);
 
@@ -352,6 +370,59 @@ export default function RegistrationsPage() {
     }
   };
 
+  const [sendingWhatsApp, setSendingWhatsApp] = useState<string | null>(null);
+
+  const handleWhatsAppSend = async (registrationId: string, type: 'registration' | 'report' | 'id-card') => {
+    const endpoints = {
+      registration: '/api/whatsapp/send-registration',
+      report: '/api/whatsapp/send-report',
+      'id-card': '/api/whatsapp/send-id-card',
+    };
+
+    setSendingWhatsApp(`${registrationId}-${type}`);
+    try {
+      const res = await fetch(endpoints[type], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Message sent successfully!`);
+      } else {
+        alert(data.error || 'Failed to send message');
+      }
+    } catch {
+      alert('Failed to send WhatsApp message');
+    } finally {
+      setSendingWhatsApp(null);
+    }
+  };
+
+  const [sendingBatchWhatsApp, setSendingBatchWhatsApp] = useState(false);
+
+  const handleSendAllReports = async () => {
+    if (!confirm(`Send report cards to all ${registrations.length} registrations via WhatsApp?`)) return;
+    setSendingBatchWhatsApp(true);
+    try {
+      const res = await fetch('/api/whatsapp/send-all-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationIds: registrations.map(r => r.id) }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Sent: ${data.sent}, Failed: ${data.failed}, Total: ${data.total}`);
+      } else {
+        alert(data.error || 'Failed to send reports');
+      }
+    } catch {
+      alert('Failed to send batch reports');
+    } finally {
+      setSendingBatchWhatsApp(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       COMPLETED: 'bg-emerald-50 text-emerald-600 border-emerald-100',
@@ -371,12 +442,10 @@ export default function RegistrationsPage() {
     );
   };
 
-  const filtered = registrations;
-
   return (
     <DashboardLayout 
       title="Student Registrations"
-      subtitle={`Track ${registrations.length} registrations across all events.`}
+      subtitle={`Track ${total} registrations across all events.`}
     >
       {/* Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
@@ -406,13 +475,22 @@ export default function RegistrationsPage() {
             <span className="hidden sm:inline">Print All Reports</span>
             <span className="sm:hidden">Print All</span>
           </button>
+          <button
+            onClick={handleSendAllReports}
+            disabled={sendingBatchWhatsApp || registrations.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 border border-emerald-100 shrink-0"
+          >
+            {sendingBatchWhatsApp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Send All via WhatsApp</span>
+            <span className="sm:hidden">WhatsApp All</span>
+          </button>
           <div className="relative flex-1 sm:w-[240px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input 
               type="text" 
               placeholder="Search roll no, name, event..." 
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 shadow-sm placeholder:text-slate-400"
             />
           </div>
@@ -425,7 +503,7 @@ export default function RegistrationsPage() {
           <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-violet-500" />
           Loading registrations...
         </div>
-      ) : filtered.length === 0 ? (
+      ) : registrations.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200/80 p-10 text-center">
           <FileText className="w-10 h-10 mx-auto mb-3 text-slate-200" />
           <p className="text-sm font-semibold text-slate-400 mb-1">No registrations found</p>
@@ -447,7 +525,7 @@ export default function RegistrationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((reg) => (
+                {registrations.map((reg) => (
                   <tr key={reg.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex gap-3 items-center">
@@ -509,82 +587,25 @@ export default function RegistrationsPage() {
                     <td className="px-5 py-4 text-right sticky right-0 bg-white z-10">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => showQr(reg.qrToken || reg.registrationCode)}
-                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors"
-                          title="Show QR Code"
-                        >
-                          <QrCode className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={generatingDoc !== null}
-                          onClick={() => handleViewReportCard(reg)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
-                          title="View Report Card"
-                        >
-                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'report-view' ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={generatingDoc !== null}
-                          onClick={() => handleDownloadReportCard(reg)}
-                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors disabled:opacity-50"
-                          title="Print Report Card"
-                        >
-                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'report-print' ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                          ) : (
-                            <Printer className="w-4 h-4" />
-                          )}
-                        </button>
-                        <span className="w-px h-4 bg-slate-200 mx-1" />
-                        <button
-                          type="button"
-                          disabled={generatingDoc !== null}
-                          onClick={() => handleViewIdCard(reg)}
-                          className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors disabled:opacity-50"
-                          title="View ID Card"
-                        >
-                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'id-view' ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-violet-600" />
-                          ) : (
-                            <IdCard className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={generatingDoc !== null}
-                          onClick={() => handleDownloadIdCard(reg)}
-                          className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors disabled:opacity-50"
-                          title="Print ID Card"
-                        >
-                          {generatingDoc?.id === reg.id && generatingDoc?.type === 'id-print' ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
-                          ) : (
-                            <Printer className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button 
                           onClick={() => router.push(`/events/${reg.event.id}`)}
                           className="flex items-center gap-1 bg-white border border-slate-200 hover:border-violet-300 hover:text-violet-700 text-slate-600 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors shadow-sm"
                           title="View Event"
                         >
                           View <ArrowRight className="w-3 h-3" />
                         </button>
-                        {canManage && (
-                          <button 
-                            onClick={() => handleDelete(reg.id)}
-                            disabled={deletingId === reg.id}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors disabled:opacity-50"
-                            title="Delete Registration"
-                          >
-                            {deletingId === reg.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          </button>
-                        )}
+                        <ActionDropdown
+                          actions={[
+                            { label: 'Show QR Code', icon: <QrCode className="w-3.5 h-3.5" />, onClick: () => showQr(reg.qrToken || reg.registrationCode) },
+                            { label: 'View Report Card', icon: <Eye className="w-3.5 h-3.5" />, onClick: () => handleViewReportCard(reg), disabled: generatingDoc !== null, loading: generatingDoc?.id === reg.id && generatingDoc?.type === 'report-view', dividerBefore: true },
+                            { label: 'Print Report Card', icon: <Printer className="w-3.5 h-3.5" />, onClick: () => handleDownloadReportCard(reg), disabled: generatingDoc !== null, loading: generatingDoc?.id === reg.id && generatingDoc?.type === 'report-print' },
+                            { label: 'Send Report via WhatsApp', icon: <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />, onClick: () => handleWhatsAppSend(reg.id, 'report'), disabled: !reg.student.phoneNumber },
+                            { label: 'View ID Card', icon: <IdCard className="w-3.5 h-3.5" />, onClick: () => handleViewIdCard(reg), disabled: generatingDoc !== null, loading: generatingDoc?.id === reg.id && generatingDoc?.type === 'id-view', dividerBefore: true },
+                            { label: 'Print ID Card', icon: <Printer className="w-3.5 h-3.5" />, onClick: () => handleDownloadIdCard(reg), disabled: generatingDoc !== null, loading: generatingDoc?.id === reg.id && generatingDoc?.type === 'id-print' },
+                            { label: 'Send ID Card via WhatsApp', icon: <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />, onClick: () => handleWhatsAppSend(reg.id, 'id-card'), disabled: !reg.student.phoneNumber },
+                            { label: 'Send QR via WhatsApp', icon: <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />, onClick: () => handleWhatsAppSend(reg.id, 'registration'), disabled: !reg.student.phoneNumber, dividerBefore: true },
+                            ...(canManage ? [{ label: 'Delete Registration', icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => handleDelete(reg.id), color: 'rose' as const, dividerBefore: true }] : []),
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -593,11 +614,32 @@ export default function RegistrationsPage() {
             </table>
           </div>
           
-          {/* Footer */}
+          {/* Footer with Pagination */}
           <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <p className="text-[11px] font-medium text-slate-500">
-              Showing <span className="font-bold text-slate-700">{filtered.length}</span> registrations
+              Showing <span className="font-bold text-slate-700">{registrations.length}</span> of <span className="font-bold text-slate-700">{total}</span> registrations
             </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Prev
+                </button>
+                <span className="text-[11px] font-semibold text-slate-500 px-2">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -650,7 +692,7 @@ export default function RegistrationsPage() {
               setReportEvalSuccess(reportEvalMode === 'edit' ? 'Evaluation updated!' : 'Evaluation submitted!');
               
               // Refresh registrations list
-              await fetchRegistrations();
+              await fetchRegistrations(page);
 
               // Update selectedStudent state so modal updates instantly
               const updatedRegRes = await fetch(`/api/registrations?search=${reg.registrationCode}`);
@@ -824,17 +866,14 @@ export default function RegistrationsPage() {
                             {Object.entries(perf.metricScores).map(([m, val]: [string, any]) => (
                               <div key={m} className="flex items-center justify-between text-xs py-0.5 border-b border-dashed border-slate-100">
                                 <span className="truncate pr-2 font-semibold text-slate-500">{m}</span>
-                                <div className="flex items-center gap-0.5">
-                                  {[1, 2, 3, 4, 5].map((star) => (
-                                    <Star
-                                      key={star}
-                                      className={`w-3.5 h-3.5 ${
-                                        star <= Number(val)
-                                          ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_2px_rgba(245,158,11,0.15)]'
-                                          : 'text-slate-200'
-                                      }`}
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-violet-500 rounded-full"
+                                      style={{ width: `${(Number(val) / 10) * 100}%` }}
                                     />
-                                  ))}
+                                  </div>
+                                  <span className="text-[10px] font-mono text-slate-500 font-bold">{Number(val)}/10</span>
                                 </div>
                               </div>
                             ))}
@@ -935,8 +974,7 @@ export default function RegistrationsPage() {
                               if (hasMetrics) {
                                 // Calculate live score/grade to show admin in real time
                                 const ratings = Object.values(reportEvalMetricScores);
-                                const avgStars = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 5;
-                                const liveScore = Math.round(avgStars * 2 * 10) / 10;
+                                const liveScore = ratings.length > 0 ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : 5;
                                 let liveGrade = 'E';
                                 if (liveScore >= 9) liveGrade = 'A+';
                                 else if (liveScore >= 8) liveGrade = 'A';
@@ -968,31 +1006,24 @@ export default function RegistrationsPage() {
                                                 <span className="text-xs font-extrabold text-slate-700 block truncate" title={metric}>{metric}</span>
                                                 <span className="text-[10px] text-slate-400 font-medium">Rate student's performance</span>
                                               </div>
-                                              <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                                                {[1, 2, 3, 4, 5].map((star) => (
-                                                  <button
-                                                    key={star}
-                                                    type="button"
-                                                    onClick={() => {
-                                                      setReportEvalMetricScores(prev => ({
-                                                        ...prev,
-                                                        [metric]: star
-                                                      }));
-                                                      setReportEvalError('');
-                                                      setReportEvalSuccess('');
-                                                    }}
-                                                    className="focus:outline-none transition-all hover:scale-110 active:scale-95 p-0.5"
-                                                  >
-                                                    <Star
-                                                      className={`w-5 h-5 transition-colors duration-150 ${
-                                                        star <= currentRating
-                                                          ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_3px_rgba(245,158,11,0.25)]'
-                                                          : 'text-slate-300 hover:text-slate-400'
-                                                      }`}
-                                                    />
-                                                  </button>
-                                                ))}
-                                                <span className="text-xs font-extrabold text-slate-600 min-w-[20px] text-center font-mono ml-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{currentRating}</span>
+                                              <div className="flex items-center gap-2 shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                                                <input
+                                                  type="range"
+                                                  min="0"
+                                                  max="10"
+                                                  step="1"
+                                                  value={currentRating}
+                                                  onChange={e => {
+                                                    setReportEvalMetricScores(prev => ({
+                                                      ...prev,
+                                                      [metric]: Number(e.target.value)
+                                                    }));
+                                                    setReportEvalError('');
+                                                    setReportEvalSuccess('');
+                                                  }}
+                                                  className="w-24 accent-violet-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer appearance-none"
+                                                />
+                                                <span className="text-xs font-extrabold text-slate-600 min-w-[24px] text-center font-mono bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{currentRating}</span>
                                               </div>
                                             </div>
                                           );

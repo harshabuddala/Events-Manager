@@ -276,8 +276,7 @@ export default function ScanClientPage({
   const derivePreview = (m: Record<string, number>) => {
     const values = Object.values(m).filter(v => v > 0)
     if (values.length === 0) return { score: 0, grade: '—' }
-    const avg = values.reduce((a, b) => a + b, 0) / values.length
-    const score = Math.round(avg * 2 * 10) / 10
+    const score = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
     let g = 'E'
     if (score >= 9) g = 'A+'
     else if (score >= 8) g = 'A'
@@ -548,33 +547,27 @@ export default function ScanClientPage({
                           return (
                             <div key={metric} className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                               <span className="text-xs sm:text-sm font-semibold text-slate-700 capitalize truncate">{metric}</span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {[1, 2, 3, 4, 5].map((n) => {
-                                  const filled = n <= value
-                                  return (
-                                    <button
-                                      key={n}
-                                      type="button"
-                                      onClick={() => {
-                                        setMetricScores(prev => ({ ...prev, [metric]: n }))
-                                        if (error) setError('')
-                                        if (success) setSuccess('')
-                                      }}
-                                      className="p-0.5 transition-transform active:scale-90"
-                                      aria-label={`Rate ${metric} ${n} star${n > 1 ? 's' : ''}`}
-                                    >
-                                      <Star
-                                        className={`w-5 h-5 ${filled ? 'text-amber-500 fill-amber-400' : 'text-slate-300'}`}
-                                      />
-                                    </button>
-                                  )
-                                })}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="10"
+                                  step="1"
+                                  value={value}
+                                  onChange={(e) => {
+                                    setMetricScores(prev => ({ ...prev, [metric]: Number(e.target.value) }))
+                                    if (error) setError('')
+                                    if (success) setSuccess('')
+                                  }}
+                                  className="w-20 sm:w-24 accent-violet-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer appearance-none"
+                                />
+                                <span className="text-xs font-extrabold text-slate-600 min-w-[24px] text-center font-mono bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{value}</span>
                               </div>
                             </div>
                           )
                         })}
                       </div>
-                      <p className="text-[10px] text-slate-400 font-medium">Overall score is auto-calculated as the average of all star ratings × 2.</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Overall score is auto-calculated as the average of all metric ratings.</p>
                     </div>
                   ) : (
                     <>
@@ -778,14 +771,14 @@ export default function ScanClientPage({
                                     return (
                                       <div key={name} className="flex items-center justify-between gap-2">
                                         <span className="text-[11px] sm:text-xs font-semibold text-slate-700 capitalize truncate">{name}</span>
-                                        <div className="flex items-center gap-0.5 shrink-0">
-                                          {[1, 2, 3, 4, 5].map((i) => (
-                                            <Star
-                                              key={i}
-                                              className={`w-3.5 h-3.5 ${i <= n ? 'text-amber-500 fill-amber-400' : 'text-slate-200'}`}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                            <div
+                                              className="h-full bg-violet-500 rounded-full"
+                                              style={{ width: `${(n / 10) * 100}%` }}
                                             />
-                                          ))}
-                                          <span className="text-[10px] font-mono text-slate-500 ml-1.5">{n}/5</span>
+                                          </div>
+                                          <span className="text-[10px] font-mono text-slate-500 font-bold">{n}/10</span>
                                         </div>
                                       </div>
                                     )

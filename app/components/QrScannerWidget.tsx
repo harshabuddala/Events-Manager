@@ -56,11 +56,39 @@ export default function QrScannerWidget({ theme = 'violet', storageKey = 'edunur
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerStartedRef = useRef(false);
 
-  // Read ?autostart=true from URL
+  // Read ?autostart=true from URL and check existing camera permission
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setAutoStart(window.location.search.includes('autostart=true'));
-    }
+    if (typeof window === 'undefined') return;
+
+    const hasAutoStart = window.location.search.includes('autostart=true');
+    setAutoStart(hasAutoStart);
+
+    // Check if camera permission is already granted
+    const checkExistingPermission = async () => {
+      try {
+        // Try to enumerate cameras without prompting
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          setCameras(devices);
+          const back = devices.find((d) =>
+            d.label.toLowerCase().includes('back') ||
+            d.label.toLowerCase().includes('rear') ||
+            d.label.toLowerCase().includes('environment')
+          );
+          setSelectedCamera(back?.id || devices[0].id);
+          setPermissionState('granted');
+
+          // If autostart, immediately start scanning
+          if (hasAutoStart) {
+            setIsScanning(true);
+          }
+        }
+      } catch {
+        // Permission not yet granted or cameras not available — stay in idle state
+      }
+    };
+
+    checkExistingPermission();
   }, []);
 
   // Request camera permission explicitly (triggers browser prompt)

@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const search = searchParams.get('search')
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)))
+    const skip = (page - 1) * limit
 
     const where: any = {}
     if (status && status !== 'ALL') {
@@ -37,7 +40,7 @@ export async function GET(request: NextRequest) {
         const eventIds = volunteer.assignments.map(a => a.eventId)
         where.eventId = { in: eventIds }
       } else {
-        return NextResponse.json({ registrations: [] })
+        return NextResponse.json({ registrations: [], pagination: { page, limit, total: 0, totalPages: 0 } })
       }
     }
 
@@ -49,32 +52,37 @@ export async function GET(request: NextRequest) {
       ? { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true }
       : { id: true, rollNumber: true, name: true, grade: true }
 
-    const registrations = await prisma.registration.findMany({
-      where,
-      include: {
-        student: { select: studentSelect },
-        event: {
-          select: {
-            id: true,
-            name: true,
-            date: true,
-            status: true,
-            community: { select: { name: true } },
-            stalls: {
-              where: { status: 'ACTIVE' },
-              select: { id: true, code: true, name: true, metrics: true }
+    const [registrations, total] = await Promise.all([
+      prisma.registration.findMany({
+        where,
+        include: {
+          student: { select: studentSelect },
+          event: {
+            select: {
+              id: true,
+              name: true,
+              date: true,
+              status: true,
+              community: { select: { name: true } },
+              stalls: {
+                where: { status: 'ACTIVE' },
+                select: { id: true, code: true, name: true, metrics: true }
+              }
             }
-          }
-        },
-        stallVisits: {
-          include: {
-            stall: { select: { id: true, name: true, metrics: true } },
-            performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
+          },
+          stallVisits: {
+            include: {
+              stall: { select: { id: true, name: true, metrics: true } },
+              performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
+            },
           },
         },
-      },
-      orderBy: { registeredAt: 'desc' },
-    })
+        orderBy: { registeredAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.registration.count({ where }),
+    ])
 
     // Transform to include stall counts
     const transformed = registrations.map(reg => ({
@@ -85,7 +93,10 @@ export async function GET(request: NextRequest) {
       community: reg.event.community.name,
     }))
 
-    return NextResponse.json({ registrations: transformed })
+    return NextResponse.json({
+      registrations: transformed,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    })
   } catch (error) {
     console.error('Registrations API error:', error instanceof Error ? error.message : 'Unknown')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

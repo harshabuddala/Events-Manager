@@ -1,17 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import { Menu, Bell, Plus } from 'lucide-react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-}
+import { useAuth } from '@/hooks/useAuth';
 
 export default function DashboardLayout({ 
   children, 
@@ -26,22 +20,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        const res = await fetch('/api/auth/me', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-        }
-      } catch {
-        // ignore
-      }
-    }
-    fetchUser();
-  }, []);
+  const { user } = useAuth();
 
   const isVolunteerRole = user && ['VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR'].includes(user.role);
 

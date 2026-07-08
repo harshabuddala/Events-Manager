@@ -38,6 +38,12 @@ export async function GET(request: Request) {
     if (roleFilter !== 'ALL') {
       where.role = roleFilter.toUpperCase()
     }
+    if (query) {
+      where.OR = [
+        { name: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+      ]
+    }
 
     const volunteers = await prisma.volunteer.findMany({
       where,
@@ -45,11 +51,6 @@ export async function GET(request: Request) {
     })
 
     const data = volunteers
-      .filter(v => {
-        if (!query) return true
-        const q = query.toLowerCase()
-        return v.name.toLowerCase().includes(q) || v.email.toLowerCase().includes(q)
-      })
       .map(v => ({
         id: v.id,
         name: v.name,

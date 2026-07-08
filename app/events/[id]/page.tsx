@@ -2349,21 +2349,18 @@ export default function EventDetailPage() {
                     {perf && !isEvaluating && perf.metricScores && Object.keys(perf.metricScores).length > 0 && (
                       <div className="px-5 py-3.5 bg-slate-50/40 border-t border-slate-100 grid grid-cols-2 gap-x-5 gap-y-2">
                         {Object.entries(perf.metricScores).map(([m, val]: [string, any]) => (
-                          <div key={m} className="flex items-center justify-between text-xs py-0.5 border-b border-dashed border-slate-100">
-                            <span className="truncate pr-2 font-semibold text-slate-500">{m}</span>
-                            <div className="flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`w-3.5 h-3.5 ${
-                                    star <= Number(val)
-                                      ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_2px_rgba(245,158,11,0.15)]'
-                                      : 'text-slate-200'
-                                  }`}
-                                />
-                              ))}
+                            <div key={m} className="flex items-center justify-between text-xs py-0.5 border-b border-dashed border-slate-100">
+                              <span className="truncate pr-2 font-semibold text-slate-500">{m}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-violet-500 rounded-full"
+                                    style={{ width: `${(Number(val) / 10) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono text-slate-500 font-bold">{Number(val)}/10</span>
+                              </div>
                             </div>
-                          </div>
                         ))}
                       </div>
                     )}
@@ -2462,8 +2459,7 @@ export default function EventDetailPage() {
                           if (hasMetrics) {
                             // Calculate live score/grade to show admin in real time
                             const ratings = Object.values(reportEvalMetricScores);
-                            const avgStars = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 5;
-                            const liveScore = Math.round(avgStars * 2 * 10) / 10;
+                            const liveScore = ratings.length > 0 ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : 5;
                             let liveGrade = 'E';
                             if (liveScore >= 9) liveGrade = 'A+';
                             else if (liveScore >= 8) liveGrade = 'A';
@@ -2495,31 +2491,24 @@ export default function EventDetailPage() {
                                             <span className="text-xs font-extrabold text-slate-700 block truncate" title={metric}>{metric}</span>
                                             <span className="text-[10px] text-slate-400 font-medium">Rate student's performance</span>
                                           </div>
-                                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                                            {[1, 2, 3, 4, 5].map((star) => (
-                                              <button
-                                                key={star}
-                                                type="button"
-                                                onClick={() => {
-                                                  setReportEvalMetricScores(prev => ({
-                                                    ...prev,
-                                                    [metric]: star
-                                                  }));
-                                                  setReportEvalError('');
-                                                  setReportEvalSuccess('');
-                                                }}
-                                                className="focus:outline-none transition-all hover:scale-110 active:scale-95 p-0.5"
-                                              >
-                                                <Star
-                                                  className={`w-5 h-5 transition-colors duration-150 ${
-                                                    star <= currentRating
-                                                      ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_3px_rgba(245,158,11,0.25)]'
-                                                      : 'text-slate-300 hover:text-slate-400'
-                                                  }`}
-                                                />
-                                              </button>
-                                            ))}
-                                            <span className="text-xs font-extrabold text-slate-600 min-w-[20px] text-center font-mono ml-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{currentRating}</span>
+                                          <div className="flex items-center gap-2 shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                                            <input
+                                              type="range"
+                                              min="0"
+                                              max="10"
+                                              step="1"
+                                              value={currentRating}
+                                              onChange={e => {
+                                                setReportEvalMetricScores(prev => ({
+                                                  ...prev,
+                                                  [metric]: Number(e.target.value)
+                                                }));
+                                                setReportEvalError('');
+                                                setReportEvalSuccess('');
+                                              }}
+                                              className="w-24 accent-violet-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer appearance-none"
+                                            />
+                                            <span className="text-xs font-extrabold text-slate-600 min-w-[24px] text-center font-mono bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{currentRating}</span>
                                           </div>
                                         </div>
                                       );
