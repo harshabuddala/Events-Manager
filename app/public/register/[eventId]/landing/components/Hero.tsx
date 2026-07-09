@@ -6,16 +6,14 @@ import AnimatedSection from './AnimatedSection'
 interface HeroProps {
   eventName: string
   eventDate: string
-  venueName: string
-  venueDetail: string
 }
 
-export default function Hero({ eventName, eventDate, venueName, venueDetail }: HeroProps) {
+export default function Hero({ eventName, eventDate }: HeroProps) {
   const targetDate = new Date(eventDate)
   const timeLeft = useCountdown(targetDate)
 
   const formattedDate = targetDate.toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-  const formattedTime = targetDate.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const formattedTime = '5:30 AM – 4:00 PM'
 
   return (
     <section className="flex flex-col justify-between space-y-4">
@@ -34,18 +32,14 @@ export default function Hero({ eventName, eventDate, venueName, venueDetail }: H
               <span>⏳</span> Event starts in
             </div>
             <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
-              <div className="flex-1 grid grid-cols-3 gap-2 w-full">
+              <div className="flex-1 grid grid-cols-2 gap-2 w-full">
                 <div className="flex flex-col items-center md:items-start text-center md:text-left">
                   <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1.5 flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-brand-accent"/> Date</div>
-                  <div className="font-bold text-xs sm:text-sm">{formattedDate}</div>
-                </div>
-                <div className="flex flex-col items-center md:items-start text-center md:text-left border-l border-white/10 pl-2 sm:pl-4">
-                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1.5 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-brand-accent"/> Venue</div>
-                  <div className="font-bold text-xs sm:text-sm leading-tight">{venueName}<br/><span className="text-[10px] font-medium opacity-80">{venueDetail}</span></div>
+                  <div className="font-bold text-[10px] sm:text-xs leading-tight">{formattedDate}</div>
                 </div>
                 <div className="flex flex-col items-center md:items-start text-center md:text-left border-l border-white/10 pl-2 sm:pl-4">
                   <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-brand-accent"/> Time</div>
-                  <div className="font-bold text-xs sm:text-sm">{formattedTime}</div>
+                  <div className="font-bold text-[10px] sm:text-xs leading-tight">5:30 AM –<br className="sm:hidden"/> 4:00 PM</div>
                 </div>
               </div>
               <div className="w-full h-px md:w-px md:h-16 bg-white/10 shrink-0" />

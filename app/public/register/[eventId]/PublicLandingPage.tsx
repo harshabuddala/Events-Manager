@@ -11,7 +11,6 @@ import ActivityZones from './landing/components/ActivityZones'
 import CTABanner from './landing/components/CTABanner'
 import ParentFunZone from './landing/components/ParentFunZone'
 import EventDetails from './landing/components/EventDetails'
-import MapSection from './landing/components/MapSection'
 import AboutEduNura from './landing/components/AboutEduNura'
 import CarnivalHighlights from './landing/components/CarnivalHighlights'
 import RegistrationForm from './landing/components/RegistrationForm'
@@ -51,7 +50,6 @@ export default function PublicLandingPage({ event }: { event: LandingEventData }
         <CTABanner text="Loved what you saw? Grab your spot before slots run out." fee={fee} />
         <AnimatedSection><ParentFunZone /></AnimatedSection>
         <AnimatedSection><EventDetails event={event} /></AnimatedSection>
-        <AnimatedSection><MapSection venueAddress={`${event.community.name}, ${event.community.location}`} /></AnimatedSection>
         <AnimatedSection><AboutEduNura /></AnimatedSection>
         <CTABanner text={`Only a few spots left for ${event.name}!`} fee={fee} />
         <AnimatedSection><CarnivalHighlights /></AnimatedSection>
