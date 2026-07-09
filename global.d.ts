@@ -17,11 +17,14 @@ interface RazorpayOptions {
   }
   redirect?: boolean
   callback_url?: string
+  retry?: { enabled: boolean }
+  timeout?: number
   modal?: {
     ondismiss?: () => void
     confirm_close?: boolean
     escape?: boolean
     closeOnSuccess?: boolean
+    backdropclose?: boolean
   }
   notes?: Record<string, string>
 }

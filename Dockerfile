@@ -33,19 +33,16 @@ RUN npm ci --prefer-offline
 # Stage 2: Generate Prisma client & build Next.js
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS builder
-# Same native deps needed so canvas can be rebuilt if necessary during Next.js build
+# Only needs openssl/libc6-compat for Prisma generate + runtime libs for canvas
+# (node_modules with compiled canvas binary are copied from the deps stage)
 RUN apk add --no-cache \
     libc6-compat \
     openssl \
-    python3 \
-    make \
-    g++ \
-    cairo-dev \
-    pango-dev \
-    libjpeg-turbo-dev \
-    giflib-dev \
-    librsvg-dev \
-    pkgconfig
+    cairo \
+    pango \
+    libjpeg-turbo \
+    giflib \
+    librsvg
 WORKDIR /app
 
 # Copy node_modules from deps stage (cached unless deps stage changed)
@@ -66,7 +63,7 @@ RUN npx prisma generate
 
 # Copy remaining files needed for build (app code, configs, etc.)
 # This layer invalidates on app code changes, but deps + prisma are already cached
-COPY next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs ./
+COPY next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs global.d.ts ./
 COPY app ./app/
 COPY lib ./lib/
 COPY hooks ./hooks/
