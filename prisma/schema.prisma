@@ -54,6 +54,13 @@ enum VolunteerStatus {
   ON_LEAVE
 }
 
+enum PaymentStatus {
+  CREATED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
 
 
 // ==================== MODELS ====================
@@ -106,6 +113,9 @@ model Event {
   status        EventStatus @default(UPCOMING)
   description   String?
   isPublicRegistrationEnabled Boolean @default(true)
+  registrationFee    Decimal?    @db.Decimal(10, 2)
+  feeCurrency        String      @default("INR")
+  feeDescription     String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -115,6 +125,7 @@ model Event {
   registrations Registration[]
   stalls        Stall[]
   assignments   VolunteerAssignment[]
+  payments      Payment[]
 
   @@map("events")
 }
@@ -153,6 +164,7 @@ model Registration {
   completedAt      DateTime?
   notes            String?
   registeredBy     String             @default("PUBLIC")
+  paymentRequired  Boolean            @default(false)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -160,6 +172,7 @@ model Registration {
   event      Event       @relation(fields: [eventId], references: [id])
   student    Student     @relation(fields: [studentId], references: [id])
   stallVisits StallVisit[]
+  payment     Payment?
 
   @@unique([eventId, studentId])
   @@index([eventId])
@@ -313,14 +326,56 @@ model ApiKey {
 }
 
 model WhatsAppConfig {
-  id                 String   @id @default(uuid())
-  phoneNumberId      String
-  accessToken        String
-  apiVersion         String   @default("v18.0")
-  businessAccountId  String?
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                            String   @id @default(uuid())
+  phoneNumberId                 String
+  accessToken                   String
+  apiVersion                    String   @default("v18.0")
+  businessAccountId             String?
+  autoSendOnRegistration        Boolean  @default(false)
+  registrationMessageTemplate   String?
+  reportMessageTemplate         String?
+  isActive                      Boolean  @default(true)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
 
   @@map("whatsapp_config")
+}
+
+model Payment {
+  id                String         @id @default(uuid())
+  eventId           String
+  registrationId    String?        @unique
+  studentSnapshot   Json?
+  razorpayOrderId   String         @unique
+  razorpayPaymentId String?        @unique
+  razorpaySignature String?
+  amount            Decimal        @db.Decimal(10, 2)
+  currency          String         @default("INR")
+  status            PaymentStatus  @default(CREATED)
+  method            String?
+  errorDescription  String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  capturedAt        DateTime?
+
+  event        Event         @relation(fields: [eventId], references: [id])
+  registration Registration? @relation(fields: [registrationId], references: [id])
+
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+  @@index([eventId, status])
+  @@index([registrationId])
+  @@map("payments")
+}
+
+model RazorpayConfig {
+  id             String   @id @default(uuid())
+  keyId          String
+  keySecret      String
+  webhookSecret  String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("razorpay_config")
 }

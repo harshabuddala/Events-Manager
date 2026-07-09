@@ -12,6 +12,9 @@ const updateSchema = z.object({
   status: z.enum(['UPCOMING', 'LIVE', 'COMPLETED', 'CANCELLED']).optional(),
   description: z.string().max(2000).optional().or(z.literal('')),
   isPublicRegistrationEnabled: z.boolean().optional(),
+  registrationFee: z.number().min(0).nullable().optional(),
+  feeCurrency: z.string().max(10).optional(),
+  feeDescription: z.string().max(500).nullable().optional(),
 })
 
 export async function GET(

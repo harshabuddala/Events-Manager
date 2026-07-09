@@ -11,10 +11,12 @@ import {
   Calendar, Users, ArrowLeft, Plus, X, Link2, UserPlus,
   CheckCircle2, Clock, AlertCircle, ShoppingBag, UserCheck,
   BarChart3, TrendingUp, FileText, Search, QrCode, Pencil,
-  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2, Copy, Check, Download, FileSpreadsheet
+  Star, Send, Award, Trash2, Printer, FileImage, Eye, IdCard, Loader2, Copy, Check, Download, FileSpreadsheet,
+  MessageCircle
 } from 'lucide-react';
 import { fetchReportCardImageBase64 } from '@/lib/letterheads';
 import { fetchIdCardImageBase64 } from '@/lib/letterheads';
+import ActionDropdown from '@/app/components/ActionDropdown';
 // ReportCardPdf and IdCardPdf are loaded dynamically inside the PDF generation
 // handlers to keep @react-pdf/renderer out of the initial client bundle.
 
@@ -27,6 +29,9 @@ interface EventDetail {
   status: string;
   description?: string;
   isPublicRegistrationEnabled: boolean;
+  registrationFee?: number | null;
+  feeCurrency?: string;
+  feeDescription?: string | null;
   community: { name: string; location: string };
   organizer: { name: string };
   letterhead?: {
@@ -58,7 +63,7 @@ export default function EventDetailPage() {
   
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics'>('registrations');
+  const [activeTab, setActiveTab] = useState<'overview' | 'stalls' | 'volunteers' | 'registrations' | 'analytics' | 'settings'>('registrations');
   const [userRole, setUserRole] = useState<string>('');
   const [isAssignedVolunteer, setIsAssignedVolunteer] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -160,6 +165,17 @@ export default function EventDetailPage() {
   const [analytics, setAnalytics] = useState<any | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  // Settings tab state
+  const [settingsForm, setSettingsForm] = useState({
+    isPublicRegistrationEnabled: true,
+    registrationFee: '',
+    feeCurrency: 'INR',
+    feeDescription: '',
+  });
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [settingsError, setSettingsError] = useState('');
+
   // Quick Register modal state
   const [showQuickReg, setShowQuickReg] = useState(false);
   const [qrForm, setQrForm] = useState({ rollNumber: '', name: '', grade: '', age: '', email: '', phoneNumber: '', parentName: '' });
@@ -214,6 +230,12 @@ export default function EventDetailPage() {
           status: getComputedStatus(data.event.date, data.event.status)
         };
         setEvent(computed);
+        setSettingsForm({
+          isPublicRegistrationEnabled: computed.isPublicRegistrationEnabled ?? true,
+          registrationFee: computed.registrationFee?.toString() || '',
+          feeCurrency: computed.feeCurrency || 'INR',
+          feeDescription: computed.feeDescription || '',
+        });
       }
     } catch (error) {
       console.error('Failed to fetch event:', error);
@@ -436,6 +458,29 @@ export default function EventDetailPage() {
   };
 
   const [generatingDoc, setGeneratingDoc] = useState<{ id: string; type: 'report-view' | 'report-print' | 'id-view' | 'id-print' } | null>(null);
+  const [sendingBatchWhatsApp, setSendingBatchWhatsApp] = useState(false);
+
+  const handleSendAllWhatsApp = async () => {
+    if (!confirm(`Send report cards to all ${registrations.length} registrations via WhatsApp?`)) return;
+    setSendingBatchWhatsApp(true);
+    try {
+      const res = await fetch('/api/whatsapp/send-all-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Sent: ${data.sent}, Failed: ${data.failed}, Total: ${data.total}`);
+      } else {
+        alert(data.error || 'Failed to send reports');
+      }
+    } catch {
+      alert('Failed to send batch reports');
+    } finally {
+      setSendingBatchWhatsApp(false);
+    }
+  };
 
   const handleBatchDownloadReportCards = async () => {
     const filteredRegs = registrations.filter(matchesSearch);
@@ -742,6 +787,35 @@ export default function EventDetailPage() {
     }
   };
 
+  const [sendingWhatsApp, setSendingWhatsApp] = useState<string | null>(null);
+
+  const handleWhatsAppSend = async (registrationId: string, type: 'registration' | 'report' | 'id-card') => {
+    const endpoints: Record<string, string> = {
+      'registration': '/api/whatsapp/send-registration',
+      'report': '/api/whatsapp/send-report',
+      'id-card': '/api/whatsapp/send-id-card',
+    };
+
+    setSendingWhatsApp(`${registrationId}-${type}`);
+    try {
+      const res = await fetch(endpoints[type], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Message sent successfully!');
+      } else {
+        alert(data.error || 'Failed to send message');
+      }
+    } catch {
+      alert('Failed to send WhatsApp message');
+    } finally {
+      setSendingWhatsApp(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout title="Event Details" subtitle="Loading...">
@@ -819,7 +893,7 @@ export default function EventDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
-        {(['overview', ...(canManageEvent ? ['stalls', 'volunteers', 'analytics'] as const : []), 'registrations'] as const).map(tab => (
+        {(['overview', ...(canManageEvent ? ['stalls', 'volunteers', 'analytics'] as const : []), 'registrations', ...(canManageEvent ? ['settings'] as const : [])] as const).map(tab => (
           <button
             key={tab}
             onClick={() => {
@@ -848,6 +922,7 @@ export default function EventDetailPage() {
             {tab === 'volunteers' && `Volunteers (${event.assignments.length})`}
             {tab === 'registrations' && `Registrations (${event._count.registrations})`}
             {tab === 'analytics' && 'Analytics'}
+            {tab === 'settings' && 'Settings'}
           </button>
         ))}
       </div>
@@ -1315,36 +1390,6 @@ export default function EventDetailPage() {
                 className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
               />
             </div>
-            {canManageEvent && (
-              <>
-                <button
-                  onClick={togglePublicRegistration}
-                  title={event?.isPublicRegistrationEnabled ? "Disable public registration" : "Enable public registration"}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
-                    event?.isPublicRegistrationEnabled
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                      : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                  }`}
-                >
-                  <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${event?.isPublicRegistrationEnabled ? 'bg-emerald-500' : 'bg-rose-400'}`}>
-                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform ${event?.isPublicRegistrationEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                  </div>
-                  <span className="hidden sm:inline">{event?.isPublicRegistrationEnabled ? 'Public Reg On' : 'Public Reg Off'}</span>
-                </button>
-                <button
-                  onClick={handleCopyPublicLink}
-                  title="Copy public registration link"
-                  className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
-                    linkCopied
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800'
-                  }`}
-                >
-                  {linkCopied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-                  <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Public Link'}</span>
-                </button>
-              </>
-            )}
             {canRegisterStudents && (
               <button
                 onClick={openQuickReg}
@@ -1362,6 +1407,15 @@ export default function EventDetailPage() {
               {generatingDoc?.id === 'batch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
               <span className="hidden sm:inline">Print All Reports</span>
               <span className="sm:hidden">Print All</span>
+            </button>
+            <button
+              onClick={handleSendAllWhatsApp}
+              disabled={sendingBatchWhatsApp || registrations.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 border border-emerald-100 shrink-0 whitespace-nowrap"
+            >
+              {sendingBatchWhatsApp ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+              <span className="hidden sm:inline">Send All via WhatsApp</span>
+              <span className="sm:hidden">WhatsApp All</span>
             </button>
             {canManageEvent && (
               <button
@@ -1457,20 +1511,20 @@ export default function EventDetailPage() {
                           {canManageEvent && (
                             <>
                               <button
-                                onClick={() => openEditModal(reg)}
-                                title="Edit Student Details"
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteRegistration(reg.id)}
-                                title="Delete Registration"
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
+                              onClick={() => openEditModal(reg)}
+                              title="Edit Student Details"
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRegistration(reg.id)}
+                              title="Delete Registration"
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                           )}
                            <button
                              onClick={() => openQrModal(reg)}
@@ -1505,7 +1559,20 @@ export default function EventDetailPage() {
                                <Printer className="w-4 h-4" />
                              )}
                            </button>
-                           <span className="w-px h-4 bg-slate-200 mx-1" />
+                           <button
+                             type="button"
+                             disabled={sendingWhatsApp !== null || !reg.student?.phoneNumber}
+                             onClick={() => handleWhatsAppSend(reg.id, 'report')}
+                             className="p-1.5 rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 transition-colors disabled:opacity-40"
+                             title="Send Report via WhatsApp"
+                           >
+                             {sendingWhatsApp === `${reg.id}-report` ? (
+                               <Loader2 className="w-4 h-4 animate-spin" />
+                             ) : (
+                               <MessageCircle className="w-4 h-4" />
+                             )}
+                           </button>
+                           <span className="w-px h-4 bg-slate-200 mx-0.5" />
                            <button
                              type="button"
                              disabled={generatingDoc !== null}
@@ -1532,10 +1599,23 @@ export default function EventDetailPage() {
                                <Printer className="w-4 h-4" />
                              )}
                            </button>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors[reg.status] || ''}`}>
-                            {reg.status.replace('_', ' ')}
-                          </span>
-                        </div>
+                           <button
+                             type="button"
+                             disabled={sendingWhatsApp !== null || !reg.student?.phoneNumber}
+                             onClick={() => handleWhatsAppSend(reg.id, 'id-card')}
+                             className="p-1.5 rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 transition-colors disabled:opacity-40"
+                             title="Send ID Card via WhatsApp"
+                           >
+                             {sendingWhatsApp === `${reg.id}-id-card` ? (
+                               <Loader2 className="w-4 h-4 animate-spin" />
+                             ) : (
+                               <MessageCircle className="w-4 h-4" />
+                             )}
+                           </button>
+                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors[reg.status] || ''}`}>
+                             {reg.status.replace('_', ' ')}
+                           </span>
+                         </div>
                       </div>
                     );
                   })}
@@ -1709,6 +1789,150 @@ export default function EventDetailPage() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ===== SETTINGS TAB ===== */}
+      {activeTab === 'settings' && canManageEvent && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-5 sm:p-6">
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Registration Settings</h3>
+
+            {settingsSuccess && (
+              <div className="mb-4 flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-4 py-3 text-sm font-semibold">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                {settingsSuccess}
+              </div>
+            )}
+            {settingsError && (
+              <div className="mb-4 flex items-center gap-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-4 py-3 text-sm font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {settingsError}
+              </div>
+            )}
+
+            <div className="space-y-5">
+              {/* Public Registration Toggle */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">Public Registration</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Allow anyone with the link to register students for this event</p>
+                </div>
+                <button
+                  onClick={() => setSettingsForm(f => ({ ...f, isPublicRegistrationEnabled: !f.isPublicRegistrationEnabled }))}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${settingsForm.isPublicRegistrationEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                >
+                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${settingsForm.isPublicRegistrationEnabled ? 'left-[26px]' : 'left-0.5'}`} />
+                </button>
+              </div>
+
+              {/* Registration Fee */}
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Registration Fee</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={settingsForm.registrationFee}
+                      onChange={e => setSettingsForm(f => ({ ...f, registrationFee: e.target.value }))}
+                      placeholder="0 for free"
+                      className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Currency</label>
+                    <select
+                      value={settingsForm.feeCurrency}
+                      onChange={e => setSettingsForm(f => ({ ...f, feeCurrency: e.target.value }))}
+                      className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800"
+                    >
+                      <option value="INR">INR (₹)</option>
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Description</label>
+                    <input
+                      type="text"
+                      value={settingsForm.feeDescription}
+                      onChange={e => setSettingsForm(f => ({ ...f, feeDescription: e.target.value }))}
+                      placeholder="e.g. Entry fee"
+                      className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">Leave amount empty or 0 for free events. Paid events use Razorpay for payment collection.</p>
+              </div>
+
+              {/* Public Registration Link */}
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Public Registration Link</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-600 font-mono truncate">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/public/register/${eventId}` : `/public/register/${eventId}`}
+                  </div>
+                  <button
+                    onClick={handleCopyPublicLink}
+                    className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all border shrink-0 ${
+                      linkCopied
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {linkCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={async () => {
+                    setSettingsSaving(true);
+                    setSettingsError('');
+                    setSettingsSuccess('');
+                    try {
+                      const res = await fetch(`/api/events/${eventId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          isPublicRegistrationEnabled: settingsForm.isPublicRegistrationEnabled,
+                          registrationFee: settingsForm.registrationFee ? parseFloat(settingsForm.registrationFee) : null,
+                          feeCurrency: settingsForm.feeCurrency,
+                          feeDescription: settingsForm.feeDescription || null,
+                        }),
+                      });
+                      if (!res.ok) {
+                        const data = await res.json();
+                        setSettingsError(data.error || 'Failed to save settings');
+                        return;
+                      }
+                      setSettingsSuccess('Settings saved successfully!');
+                      fetchEvent();
+                      setTimeout(() => setSettingsSuccess(''), 3000);
+                    } catch {
+                      setSettingsError('Network error. Please try again.');
+                    } finally {
+                      setSettingsSaving(false);
+                    }
+                  }}
+                  disabled={settingsSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                >
+                  {settingsSaving ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                  ) : (
+                    'Save Settings'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

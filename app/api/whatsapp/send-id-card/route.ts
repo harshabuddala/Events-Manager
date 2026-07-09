@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import { sendImageMessage, uploadMedia, formatPhone } from '@/lib/whatsapp'
+import { sendIdCardMessage, formatPhone } from '@/lib/whatsapp'
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       where: { id: registrationId },
       include: {
         student: { select: { name: true, rollNumber: true, grade: true, parentName: true, phoneNumber: true } },
-        event: { select: { name: true, community: { select: { name: true } } } },
+        event: { select: { id: true, name: true, date: true, community: { select: { name: true } } } },
       },
     })
 
@@ -34,22 +34,42 @@ export async function POST(request: NextRequest) {
     }
 
     const phone = formatPhone(registration.student.phoneNumber)
-    const studentName = registration.student.name
-    const rollNumber = registration.student.rollNumber
-    const eventName = registration.event.name
 
-    const caption = `🎓 ID Card — ${studentName}\n\n` +
-      `Roll Number: ${rollNumber}\n` +
-      `Event: ${eventName}\n\n` +
-      `Present this at the event entry.`
+    const eventDate = new Date(registration.event.date).toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
 
-    const mediaId = await uploadMedia(
-      Buffer.from('placeholder'),
-      'image/png',
-      `${rollNumber}-id-card.png`
+    // Generate ID card PDF using existing design
+    const { generateIdCardPdf } = await import('@/lib/id-card-pdf')
+    const idCardPdfBuffer = await generateIdCardPdf({
+      student: {
+        name: registration.student.name,
+        rollNumber: registration.student.rollNumber,
+        grade: registration.student.grade,
+        parentName: registration.student.parentName,
+      },
+      event: {
+        name: registration.event.name,
+      },
+      qrToken: registration.qrToken || registration.registrationCode,
+    })
+
+    // Send with customizable template
+    const result = await sendIdCardMessage(
+      phone,
+      registration.student.parentName || 'Parent',
+      registration.student.name,
+      registration.event.name,
+      registration.student.rollNumber,
+      registration.student.grade,
+      eventDate,
+      registration.event.community?.name || '',
+      registration.registrationCode,
+      idCardPdfBuffer
     )
-
-    const result = await sendImageMessage(phone, mediaId, caption)
 
     if (result.success) {
       return NextResponse.json({

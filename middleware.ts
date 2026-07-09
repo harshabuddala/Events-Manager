@@ -16,25 +16,29 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('X-DNS-Prefetch-Control', 'off')
   response.headers.set('X-XSS-Protection', '1; mode=block')
-  response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=()')
+  response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(self)')
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   response.headers.set('X-Permitted-Cross-Domain-Policies', 'none')
-  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+  // Changed from 'same-origin' to 'same-origin-allow-popups'.
+  // Razorpay opens a popup for payment processing and needs to communicate
+  // back to the parent window via window.opener. 'same-origin' severs that
+  // link entirely, causing the blank page bug after payment selection.
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
   response.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
 
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://unpkg.com",
-    "style-src 'self' 'unsafe-inline' https://unpkg.com",
-    "img-src 'self' blob: data: https://unpkg.com",
-    "font-src 'self' data: https://unpkg.com",
-    "connect-src 'self' https:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://unpkg.com https://checkout.razorpay.com",
+    "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+    "img-src 'self' blob: data: https://unpkg.com https://edunura.com https://images.unsplash.com",
+    "font-src 'self' data: https://unpkg.com https://fonts.gstatic.com",
+    "connect-src 'self' https: wss: blob:",
     "frame-ancestors 'self'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' https:",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
-    "frame-src 'self' blob:",
+    "frame-src 'self' blob: https://*.razorpay.com",
   ].join('; ')
   response.headers.set('Content-Security-Policy', csp)
 

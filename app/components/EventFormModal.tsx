@@ -49,6 +49,9 @@ interface EventFormModalProps {
     endDate?: string;
     status: string;
     description?: string;
+    registrationFee?: number | null;
+    feeCurrency?: string;
+    feeDescription?: string | null;
     stalls?: Array<{ id: string; code: string; name: string; status: string }> | null;
     assignments?: Array<{
       id: string;
@@ -75,6 +78,9 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
     endDate: '',
     status: 'UPCOMING',
     description: '',
+    registrationFee: '',
+    feeCurrency: 'INR',
+    feeDescription: '',
   });
 
   // Resources
@@ -167,6 +173,9 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
         endDate: editEvent.endDate ? new Date(editEvent.endDate).toISOString().split('T')[0] : '',
         status: editEvent.status,
         description: editEvent.description || '',
+        registrationFee: (editEvent as any).registrationFee?.toString() || '',
+        feeCurrency: (editEvent as any).feeCurrency || 'INR',
+        feeDescription: (editEvent as any).feeDescription || '',
       });
       setLinkedStallIds(new Set(Array.isArray(editEvent.stalls) ? editEvent.stalls.map(s => s.id) : []));
       setAssignments(Array.isArray(editEvent.assignments) ? editEvent.assignments.map(a => ({
@@ -179,7 +188,7 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
       })) : []);
     } else {
       const autoCode = `E-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      setFormData({ code: autoCode, name: '', communityId: '', date: '', endDate: '', status: 'UPCOMING', description: '' });
+      setFormData({ code: autoCode, name: '', communityId: '', date: '', endDate: '', status: 'UPCOMING', description: '', registrationFee: '', feeCurrency: 'INR', feeDescription: '' });
     }
 
     // Fetch resources
@@ -412,6 +421,9 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
         ...formData,
         date: new Date(formData.date).toISOString(),
         endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined,
+        registrationFee: formData.registrationFee ? parseFloat(formData.registrationFee) : null,
+        feeCurrency: formData.feeCurrency,
+        feeDescription: formData.feeDescription || null,
       };
 
       let eventId = editEvent?.id;
@@ -675,6 +687,51 @@ export default function EventFormModal({ isOpen, onClose, onSuccess, editEvent }
                   <FileText className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe the event..." rows={3} className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all placeholder:text-slate-400 text-slate-800 resize-none" />
                 </div>
+              </div>
+
+              {/* Registration Fee */}
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Registration Fee (Optional)</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700" htmlFor="registrationFee">Amount</label>
+                    <input
+                      id="registrationFee"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.registrationFee}
+                      onChange={(e) => setFormData({ ...formData, registrationFee: e.target.value })}
+                      placeholder="0 for free"
+                      className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700" htmlFor="feeCurrency">Currency</label>
+                    <select
+                      id="feeCurrency"
+                      value={formData.feeCurrency}
+                      onChange={(e) => setFormData({ ...formData, feeCurrency: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800"
+                    >
+                      <option value="INR">INR (₹)</option>
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700" htmlFor="feeDescription">Description</label>
+                    <input
+                      id="feeDescription"
+                      type="text"
+                      value={formData.feeDescription}
+                      onChange={(e) => setFormData({ ...formData, feeDescription: e.target.value })}
+                      placeholder="e.g. Entry fee"
+                      className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-800"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">Leave amount empty or 0 for free events. Paid events use Razorpay for collection.</p>
               </div>
             </div>
           )}

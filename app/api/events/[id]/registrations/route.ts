@@ -226,9 +226,21 @@ export async function POST(
       },
       include: {
         student: { select: { id: true, rollNumber: true, name: true, grade: true, age: true, email: true, parentName: true, phoneNumber: true } },
+        event: { select: { id: true, name: true, date: true, community: { select: { name: true } } } },
         stallVisits: { include: { stall: { select: { name: true } }, performance: { select: { score: true, grade: true } } } },
       },
     })
+
+    // Auto-send WhatsApp ID card (non-blocking)
+    try {
+      const { autoSendOnRegistration } = await import('@/lib/whatsapp')
+      autoSendOnRegistration({
+        student: registration.student,
+        event: registration.event,
+        registrationCode: registration.registrationCode,
+        qrToken: registration.qrToken || registration.registrationCode,
+      }).catch(() => {})
+    } catch {}
 
     return NextResponse.json({ registration }, { status: 201 })
   } catch (error) {

@@ -26,6 +26,9 @@ export async function GET() {
         accessToken: config.accessToken.slice(0, 8) + '••••••••' + config.accessToken.slice(-4),
         apiVersion: config.apiVersion,
         businessAccountId: config.businessAccountId,
+        autoSendOnRegistration: config.autoSendOnRegistration,
+        registrationMessageTemplate: config.registrationMessageTemplate,
+        reportMessageTemplate: config.reportMessageTemplate,
         isActive: config.isActive,
       },
     })
@@ -43,7 +46,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { phoneNumberId, accessToken, apiVersion, businessAccountId } = body
+    const {
+      phoneNumberId, accessToken, apiVersion, businessAccountId,
+      autoSendOnRegistration, registrationMessageTemplate, reportMessageTemplate,
+    } = body
 
     if (!phoneNumberId || !accessToken) {
       return NextResponse.json({ error: 'Phone Number ID and Access Token are required' }, { status: 400 })
@@ -59,6 +65,9 @@ export async function POST(request: NextRequest) {
           accessToken,
           apiVersion: apiVersion || 'v18.0',
           businessAccountId: businessAccountId || null,
+          autoSendOnRegistration: autoSendOnRegistration ?? false,
+          registrationMessageTemplate: registrationMessageTemplate || null,
+          reportMessageTemplate: reportMessageTemplate || null,
         },
       })
     } else {
@@ -68,6 +77,9 @@ export async function POST(request: NextRequest) {
           accessToken,
           apiVersion: apiVersion || 'v18.0',
           businessAccountId: businessAccountId || null,
+          autoSendOnRegistration: autoSendOnRegistration ?? false,
+          registrationMessageTemplate: registrationMessageTemplate || null,
+          reportMessageTemplate: reportMessageTemplate || null,
           isActive: true,
         },
       })

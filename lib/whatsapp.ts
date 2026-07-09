@@ -5,6 +5,9 @@ interface WhatsAppConfig {
   accessToken: string
   apiVersion: string
   businessAccountId?: string | null
+  autoSendOnRegistration: boolean
+  registrationMessageTemplate: string | null
+  reportMessageTemplate: string | null
 }
 
 let cachedConfig: WhatsAppConfig | null = null
@@ -29,6 +32,9 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
     accessToken: config.accessToken,
     apiVersion: config.apiVersion,
     businessAccountId: config.businessAccountId,
+    autoSendOnRegistration: config.autoSendOnRegistration,
+    registrationMessageTemplate: config.registrationMessageTemplate,
+    reportMessageTemplate: config.reportMessageTemplate,
   }
   configCacheTime = now
 
@@ -117,6 +123,46 @@ export async function sendImageMessage(to: string, mediaId: string, caption?: st
 
     if (caption) {
       (body.image as Record<string, unknown>).caption = caption
+    }
+
+    const res = await fetch(`${base}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': auth,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const err = await res.json()
+      return { success: false, error: err.error?.message || `HTTP ${res.status}` }
+    }
+
+    const data = await res.json()
+    return { success: true, messageId: data.messages?.[0]?.id }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+export async function sendDocumentMessage(to: string, mediaId: string, caption?: string, filename?: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const base = await getApiBase()
+    const auth = await getAuthHeader()
+
+    const body: Record<string, unknown> = {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'document',
+      document: { id: mediaId },
+    }
+
+    if (caption) {
+      (body.document as Record<string, unknown>).caption = caption
+    }
+    if (filename) {
+      (body.document as Record<string, unknown>).filename = filename
     }
 
     const res = await fetch(`${base}/messages`, {
@@ -234,6 +280,52 @@ export async function sendRegistrationMessage(
   return sendImageMessage(phone, mediaId, caption)
 }
 
+export async function sendIdCardMessage(
+  phone: string,
+  parentName: string,
+  studentName: string,
+  eventName: string,
+  rollNumber: string,
+  grade: string,
+  eventDate: string,
+  communityName: string,
+  registrationCode: string,
+  idCardPdfBuffer: Buffer
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const config = await getWhatsAppConfig()
+  if (!config) return { success: false, error: 'WhatsApp is not configured' }
+
+  const defaultTemplate = `Hi {parentName} 👋
+
+Your child *{studentName}* has been successfully registered for *{eventName}*.
+
+📋 *Registration Details:*
+• Roll Number: {rollNumber}
+• Class: {grade}
+• Event Date: {eventDate}
+• Community: {communityName}
+
+🎫 Please find the ID card attached below. Present it at the event entry.
+
+_Powered by Edunura Events_`
+
+  const template = config.registrationMessageTemplate || defaultTemplate
+
+  const caption = template
+    .replace(/\{parentName\}/g, parentName)
+    .replace(/\{studentName\}/g, studentName)
+    .replace(/\{eventName\}/g, eventName)
+    .replace(/\{rollNumber\}/g, rollNumber)
+    .replace(/\{eventDate\}/g, eventDate)
+    .replace(/\{communityName\}/g, communityName)
+    .replace(/\{registrationCode\}/g, registrationCode)
+    .replace(/\{grade\}/g, grade)
+
+  const mediaId = await uploadMedia(idCardPdfBuffer, 'application/pdf', `${rollNumber}-id-card.pdf`)
+
+  return sendDocumentMessage(phone, mediaId, caption, `${rollNumber}-id-card.pdf`)
+}
+
 export async function sendReportMessage(
   phone: string,
   parentName: string,
@@ -243,21 +335,40 @@ export async function sendReportMessage(
   visitedStalls: number,
   avgScore: number,
   grade: string,
-  summaryImageBuffer?: Buffer
+  rollNumber: string,
+  reportPdfBuffer?: Buffer
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const config = await getWhatsAppConfig()
   if (!config) return { success: false, error: 'WhatsApp is not configured' }
 
-  const text = `📊 Report Card — ${studentName}\n\n` +
-    `Event: ${eventName}\n` +
-    `Stalls Completed: ${visitedStalls}/${totalStalls}\n` +
-    `Overall Score: ${avgScore}/10\n` +
-    `Grade: ${grade}\n\n` +
-    `Thank you for participating in Edunura Events!`
+  const defaultTemplate = `Hi {parentName} 👋
 
-  if (summaryImageBuffer) {
-    const mediaId = await uploadMedia(summaryImageBuffer, 'image/png', `${studentName}-report.png`)
-    return sendImageMessage(phone, mediaId, text)
+Here's the assessment report for *{studentName}* at *{eventName}*.
+
+📊 *Assessment Summary:*
+• Stalls Completed: {visitedStalls}/{totalStalls}
+• Overall Score: {avgScore}/10
+• Grade: {grade}
+
+⭐ *Performance Rating:* {avgScore}/10
+
+Thank you for participating in Edunura Events! 🎓`
+
+  const template = config.reportMessageTemplate || defaultTemplate
+
+  const text = template
+    .replace(/\{parentName\}/g, parentName)
+    .replace(/\{studentName\}/g, studentName)
+    .replace(/\{eventName\}/g, eventName)
+    .replace(/\{rollNumber\}/g, rollNumber)
+    .replace(/\{totalStalls\}/g, String(totalStalls))
+    .replace(/\{visitedStalls\}/g, String(visitedStalls))
+    .replace(/\{avgScore\}/g, String(avgScore))
+    .replace(/\{grade\}/g, grade)
+
+  if (reportPdfBuffer) {
+    const mediaId = await uploadMedia(reportPdfBuffer, 'application/pdf', `${rollNumber}-report-card.pdf`)
+    return sendDocumentMessage(phone, mediaId, text, `${rollNumber}-report-card.pdf`)
   }
 
   return sendTextMessage(phone, text)
@@ -269,4 +380,60 @@ export function formatPhone(phone: string): string {
   if (cleaned.startsWith('91') && cleaned.length === 12) return cleaned
   if (cleaned.length === 10) return `91${cleaned}`
   return cleaned
+}
+
+export async function autoSendOnRegistration(registration: {
+  student: { name: string; rollNumber: string; grade: string; phoneNumber?: string | null; parentName?: string | null }
+  event: { name: string; date: Date | string; community?: { name: string } | null }
+  registrationCode: string
+  qrToken: string
+}): Promise<void> {
+  try {
+    const config = await getWhatsAppConfig()
+    if (!config || !config.autoSendOnRegistration) return
+
+    const phone = registration.student.phoneNumber
+    if (!phone) return
+
+    const formattedPhone = formatPhone(phone)
+
+    const eventDate = new Date(registration.event.date).toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+
+    const { generateIdCardPdf } = await import('./id-card-pdf')
+
+    const idCardPdfBuffer = await generateIdCardPdf({
+      student: {
+        name: registration.student.name,
+        rollNumber: registration.student.rollNumber,
+        grade: registration.student.grade,
+        parentName: registration.student.parentName,
+      },
+      event: {
+        name: registration.event.name,
+      },
+      qrToken: registration.qrToken,
+    })
+
+    await sendIdCardMessage(
+      formattedPhone,
+      registration.student.parentName || 'Parent',
+      registration.student.name,
+      registration.event.name,
+      registration.student.rollNumber,
+      registration.student.grade,
+      eventDate,
+      registration.event.community?.name || '',
+      registration.registrationCode,
+      idCardPdfBuffer
+    )
+
+    console.log(`WhatsApp auto-sent ID card to ${formattedPhone} for ${registration.student.name}`)
+  } catch (error) {
+    console.error('Auto-send WhatsApp failed:', error instanceof Error ? error.message : 'Unknown error')
+  }
 }

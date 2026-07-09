@@ -142,10 +142,21 @@ export const POST = withApiKey(async (request: NextRequest) => {
       registeredBy: registeredBy || 'API',
     },
     include: {
-      student: { select: { id: true, rollNumber: true, name: true, grade: true } },
-      event: { select: { id: true, name: true, code: true } },
+      student: { select: { id: true, rollNumber: true, name: true, grade: true, parentName: true, phoneNumber: true } },
+      event: { select: { id: true, name: true, code: true, date: true, community: { select: { name: true } } } },
     },
   })
+
+  // Auto-send WhatsApp ID card (non-blocking)
+  try {
+    const { autoSendOnRegistration } = await import('@/lib/whatsapp')
+    autoSendOnRegistration({
+      student: registration.student,
+      event: registration.event,
+      registrationCode: registration.registrationCode,
+      qrToken: registration.qrToken || registration.registrationCode,
+    }).catch(() => {})
+  } catch {}
 
   return apiCreated(registration)
 })

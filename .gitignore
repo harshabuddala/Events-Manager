@@ -19,6 +19,5 @@ coverage/
 certificates
 /certs
 
-# Test/debug scripts (dev-only)
-test_*
-check_*
+# Test/debug scripts (moved to tests/)
+tests/

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import { sendRegistrationMessage, formatPhone } from '@/lib/whatsapp'
-import QRCode from 'qrcode'
+import { sendIdCardMessage, formatPhone } from '@/lib/whatsapp'
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,8 +20,8 @@ export async function POST(request: NextRequest) {
     const registration = await prisma.registration.findUnique({
       where: { id: registrationId },
       include: {
-        student: { select: { name: true, rollNumber: true, parentName: true, phoneNumber: true } },
-        event: { select: { name: true, community: { select: { name: true } } } },
+        student: { select: { name: true, rollNumber: true, grade: true, parentName: true, phoneNumber: true } },
+        event: { select: { id: true, name: true, date: true, community: { select: { name: true } } } },
       },
     })
 
@@ -31,37 +30,52 @@ export async function POST(request: NextRequest) {
     }
 
     if (!registration.student.phoneNumber) {
-      return NextResponse.json({ error: 'No phone number on file for this student' }, { status: 400 })
+      return NextResponse.json({ error: 'No phone number on file' }, { status: 400 })
     }
 
     const phone = formatPhone(registration.student.phoneNumber)
-    const parentName = registration.student.parentName || 'Parent'
-    const studentName = registration.student.name
-    const eventName = registration.event.name
-    const rollNumber = registration.student.rollNumber
-    const qrToken = registration.qrToken || registration.registrationCode
 
-    const scanUrl = `${process.env.APP_URL || 'http://localhost:8472'}/r/${qrToken}`
-    const qrBuffer = await QRCode.toBuffer(scanUrl, {
-      width: 300,
-      margin: 2,
-      color: { dark: '#0a0f2d', light: '#ffffff' },
+    const eventDate = new Date(registration.event.date).toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
     })
 
-    const result = await sendRegistrationMessage(
+    // Generate ID card PDF using existing design
+    const { generateIdCardPdf } = await import('@/lib/id-card-pdf')
+    const idCardPdfBuffer = await generateIdCardPdf({
+      student: {
+        name: registration.student.name,
+        rollNumber: registration.student.rollNumber,
+        grade: registration.student.grade,
+        parentName: registration.student.parentName,
+      },
+      event: {
+        name: registration.event.name,
+      },
+      qrToken: registration.qrToken || registration.registrationCode,
+    })
+
+    // Send with customizable template
+    const result = await sendIdCardMessage(
       phone,
-      parentName,
-      studentName,
-      eventName,
-      rollNumber,
-      qrBuffer
+      registration.student.parentName || 'Parent',
+      registration.student.name,
+      registration.event.name,
+      registration.student.rollNumber,
+      registration.student.grade,
+      eventDate,
+      registration.event.community?.name || '',
+      registration.registrationCode,
+      idCardPdfBuffer
     )
 
     if (result.success) {
       return NextResponse.json({
         success: true,
         messageId: result.messageId,
-        message: `Registration confirmation sent to ${phone}`,
+        message: `Registration confirmation with ID card sent to ${phone}`,
       })
     }
 

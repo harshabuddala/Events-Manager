@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { publicRegRateLimiter } from '@/lib/rate-limiter'
 import { readJsonBody } from '@/lib/request'
 import { generateQrToken } from '@/lib/utils'
 import { z } from 'zod'
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  return forwarded?.split(',')[0]?.trim() || '127.0.0.1'
-}
 
 const publicRegSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
@@ -59,6 +53,9 @@ export async function GET(
         status: true,
         description: true,
         isPublicRegistrationEnabled: true,
+        registrationFee: true,
+        feeCurrency: true,
+        feeDescription: true,
         community: { select: { name: true, location: true } },
       },
     })
@@ -84,16 +81,6 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const clientIp = getClientIp(request)
-  try {
-    await publicRegRateLimiter.consume(`public-reg:${clientIp}`)
-  } catch {
-    return NextResponse.json(
-      { error: 'Too many registration attempts from your IP. Please try again later.' },
-      { status: 429 }
-    )
-  }
-
   try {
     const { id: eventId } = await params
 
@@ -111,6 +98,14 @@ export async function POST(
     }
     if (!event.isPublicRegistrationEnabled) {
       return NextResponse.json({ error: 'Public registration for this event is currently disabled' }, { status: 403 })
+    }
+
+    // Paid events must use the payment flow
+    if (event.registrationFee && event.registrationFee.toNumber() > 0) {
+      return NextResponse.json(
+        { error: 'This event requires payment', requiresPayment: true },
+        { status: 400 }
+      )
     }
 
     const parsed = await readJsonBody(request, publicRegSchema)
@@ -207,6 +202,17 @@ export async function POST(
         },
       },
     })
+
+    // Auto-send WhatsApp ID card (non-blocking)
+    try {
+      const { autoSendOnRegistration } = await import('@/lib/whatsapp')
+      autoSendOnRegistration({
+        student: registration.student,
+        event: registration.event,
+        registrationCode: registration.registrationCode,
+        qrToken: registration.qrToken || registration.registrationCode,
+      }).catch(() => {})
+    } catch {}
 
     return NextResponse.json({ registration }, { status: 201 })
   } catch (error) {

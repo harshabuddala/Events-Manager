@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* Landing page theme tokens */
+@theme {
+  --color-brand-primary: #0B1F4D;
+  --color-brand-accent: #F5730B;
+  --color-brand-bg: #FAFAF7;
+  --font-display: var(--font-baloo2), ui-sans-serif, system-ui, sans-serif;
+  --animate-bounce-in: bounce-in 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  --animate-pulse-scale: pulse-scale 2s ease-in-out infinite;
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse-scale {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@utility hide-scrollbar {
+  &::-webkit-scrollbar { display: none; }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Hide scrollbar structure */
 ::-webkit-scrollbar {
   display: none;

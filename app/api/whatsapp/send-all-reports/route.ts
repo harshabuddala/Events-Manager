@@ -19,15 +19,20 @@ export async function POST(request: NextRequest) {
       registrations = await prisma.registration.findMany({
         where: { id: { in: registrationIds } },
         include: {
-          student: { select: { name: true, parentName: true, phoneNumber: true } },
+          student: { select: { name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
           event: {
             select: {
               name: true,
-              stalls: { where: { status: 'ACTIVE' }, select: { id: true } },
+              date: true,
+              community: { select: { name: true } },
+              stalls: { where: { status: 'ACTIVE' }, select: { id: true, name: true, metrics: true } },
             },
           },
           stallVisits: {
-            include: { performance: { select: { score: true, grade: true } } },
+            include: {
+              stall: { select: { name: true, metrics: true } },
+              performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
+            },
           },
         },
       })
@@ -35,15 +40,20 @@ export async function POST(request: NextRequest) {
       registrations = await prisma.registration.findMany({
         where: { eventId },
         include: {
-          student: { select: { name: true, parentName: true, phoneNumber: true } },
+          student: { select: { name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
           event: {
             select: {
               name: true,
-              stalls: { where: { status: 'ACTIVE' }, select: { id: true } },
+              date: true,
+              community: { select: { name: true } },
+              stalls: { where: { status: 'ACTIVE' }, select: { id: true, name: true, metrics: true } },
             },
           },
           stallVisits: {
-            include: { performance: { select: { score: true, grade: true } } },
+            include: {
+              stall: { select: { name: true, metrics: true } },
+              performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
+            },
           },
         },
       })
@@ -54,6 +64,8 @@ export async function POST(request: NextRequest) {
     if (registrations.length === 0) {
       return NextResponse.json({ error: 'No registrations found' }, { status: 404 })
     }
+
+    const { generateReportCardPdf } = await import('@/lib/report-card-pdf')
 
     const results = []
 
@@ -73,6 +85,24 @@ export async function POST(request: NextRequest) {
       grades.forEach(g => { gradeCounts[g] = (gradeCounts[g] || 0) + 1 })
       const topGrade = Object.entries(gradeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
 
+      // Generate PDF report card
+      const reportPdfBuffer = await generateReportCardPdf({
+        student: {
+          name: reg.student.name,
+          rollNumber: reg.student.rollNumber,
+          grade: reg.student.grade,
+          age: reg.student.age,
+          parentName: reg.student.parentName,
+        },
+        event: {
+          name: reg.event.name,
+          date: reg.event.date.toISOString(),
+          community: reg.event.community,
+        },
+        stallVisits: reg.stallVisits,
+        registrationCode: reg.registrationCode,
+      })
+
       const result = await sendReportMessage(
         phone,
         reg.student.parentName || 'Parent',
@@ -81,7 +111,9 @@ export async function POST(request: NextRequest) {
         totalStalls,
         visitedStalls,
         avgScore,
-        topGrade
+        topGrade,
+        reg.student.rollNumber,
+        reportPdfBuffer
       )
 
       results.push({ id: reg.id, name: reg.student.name, ...result })

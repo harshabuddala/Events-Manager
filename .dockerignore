@@ -14,8 +14,7 @@ generated/
 
 # Testing
 coverage/
-test_*
-check_*
+tests/
 __tests__/
 
 # Environment files (secrets injected by Dokploy)
@@ -51,10 +50,11 @@ docker-compose*.yml
 .dockerignore
 
 # Dev-only files
-https-dev-server.js
-restart-dev.sh
+scripts/
 
 # Misc
+.mimocode/
+.understand-anything/
 *.log
 npm-debug.log*
 yarn-debug.log*

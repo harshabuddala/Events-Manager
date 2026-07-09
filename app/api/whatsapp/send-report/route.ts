@@ -20,16 +20,19 @@ export async function POST(request: NextRequest) {
     const registration = await prisma.registration.findUnique({
       where: { id: registrationId },
       include: {
-        student: { select: { name: true, parentName: true, phoneNumber: true } },
+        student: { select: { name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
         event: {
           select: {
             name: true,
-            stalls: { where: { status: 'ACTIVE' }, select: { id: true } },
+            date: true,
+            community: { select: { name: true } },
+            stalls: { where: { status: 'ACTIVE' }, select: { id: true, name: true, metrics: true } },
           },
         },
         stallVisits: {
           include: {
-            performance: { select: { score: true, grade: true } },
+            stall: { select: { name: true, metrics: true } },
+            performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
           },
         },
       },
@@ -46,6 +49,7 @@ export async function POST(request: NextRequest) {
     const phone = formatPhone(registration.student.phoneNumber)
     const parentName = registration.student.parentName || 'Parent'
     const studentName = registration.student.name
+    const rollNumber = registration.student.rollNumber
     const eventName = registration.event.name
     const totalStalls = registration.event.stalls.length
     const visitedStalls = registration.stallVisits.filter(sv => sv.performance).length
@@ -66,6 +70,25 @@ export async function POST(request: NextRequest) {
     grades.forEach(g => { gradeCounts[g] = (gradeCounts[g] || 0) + 1 })
     const topGrade = Object.entries(gradeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
 
+    // Generate PDF report card using existing design
+    const { generateReportCardPdf } = await import('@/lib/report-card-pdf')
+    const reportPdfBuffer = await generateReportCardPdf({
+      student: {
+        name: studentName,
+        rollNumber,
+        grade: registration.student.grade,
+        age: registration.student.age,
+        parentName: registration.student.parentName,
+      },
+      event: {
+        name: eventName,
+        date: registration.event.date.toISOString(),
+        community: registration.event.community,
+      },
+      stallVisits: registration.stallVisits,
+      registrationCode: registration.registrationCode,
+    })
+
     const result = await sendReportMessage(
       phone,
       parentName,
@@ -74,14 +97,16 @@ export async function POST(request: NextRequest) {
       totalStalls,
       visitedStalls,
       avgScore,
-      topGrade
+      topGrade,
+      rollNumber,
+      reportPdfBuffer
     )
 
     if (result.success) {
       return NextResponse.json({
         success: true,
         messageId: result.messageId,
-        message: `Report card sent to ${phone}`,
+        message: `Report card PDF sent to ${phone}`,
       })
     }
 
