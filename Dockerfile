@@ -7,7 +7,20 @@
 # Stage 1: Install dependencies (cached unless package files change)
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS deps
-RUN apk add --no-cache libc6-compat openssl
+# canvas (used by @react-pdf/renderer for server-side PDF) requires native
+# build tools and Cairo graphics libraries to compile on Alpine Linux.
+RUN apk add --no-cache \
+    libc6-compat \
+    openssl \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    pango-dev \
+    libjpeg-turbo-dev \
+    giflib-dev \
+    librsvg-dev \
+    pkgconfig
 WORKDIR /app
 
 # Copy only package files first (rarely changes = better cache)
@@ -20,7 +33,19 @@ RUN npm ci --prefer-offline
 # Stage 2: Generate Prisma client & build Next.js
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS builder
-RUN apk add --no-cache libc6-compat openssl
+# Same native deps needed so canvas can be rebuilt if necessary during Next.js build
+RUN apk add --no-cache \
+    libc6-compat \
+    openssl \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    pango-dev \
+    libjpeg-turbo-dev \
+    giflib-dev \
+    librsvg-dev \
+    pkgconfig
 WORKDIR /app
 
 # Copy node_modules from deps stage (cached unless deps stage changed)
@@ -61,7 +86,16 @@ RUN npm run build
 # Stage 3: Production runner (minimal image)
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl curl
+# canvas native binaries need Cairo/Pango shared libs at runtime (not just build time)
+RUN apk add --no-cache \
+    libc6-compat \
+    openssl \
+    curl \
+    cairo \
+    pango \
+    libjpeg-turbo \
+    giflib \
+    librsvg
 WORKDIR /app
 
 ENV NODE_ENV=production
