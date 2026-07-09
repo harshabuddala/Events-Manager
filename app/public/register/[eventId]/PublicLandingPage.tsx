@@ -43,7 +43,7 @@ export default function PublicLandingPage({ event }: { event: LandingEventData }
       <ScrollProgress />
       <Navbar fee={fee} />
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 pb-32 sm:pb-12 mt-1">
-        <Hero eventName={event.name} eventDate={event.date} venueName={event.community.name} venueDetail={event.community.location} />
+        <Hero eventName={event.name} eventDate={event.date} />
         <AnimatedSection><HowItWorks fee={fee} eventDate={event.date} /></AnimatedSection>
         <TrustStrip />
         <ActivityZones />
