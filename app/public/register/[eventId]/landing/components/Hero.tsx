@@ -13,7 +13,7 @@ export default function Hero({ eventName, eventDate }: HeroProps) {
   const timeLeft = useCountdown(targetDate)
 
   const formattedDate = targetDate.toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-  const formattedTime = '5:30 AM – 4:00 PM'
+  const formattedTime = '4:00 PM'
 
   return (
     <section className="flex flex-col justify-between space-y-4">
@@ -39,7 +39,7 @@ export default function Hero({ eventName, eventDate }: HeroProps) {
                 </div>
                 <div className="flex flex-col items-center md:items-start text-center md:text-left border-l border-white/10 pl-2 sm:pl-4">
                   <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-brand-accent"/> Time</div>
-                  <div className="font-bold text-[10px] sm:text-xs leading-tight">5:30 AM –<br className="sm:hidden"/> 4:00 PM</div>
+                  <div className="font-bold text-xs sm:text-sm">{formattedTime}</div>
                 </div>
               </div>
               <div className="w-full h-px md:w-px md:h-16 bg-white/10 shrink-0" />
