@@ -84,6 +84,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@edunura-db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      APP_URL: ${APP_URL}
       PORT: 8472
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8472/api/health"]
