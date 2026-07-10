@@ -26,7 +26,20 @@ async function fetchAsBase64(path: string): Promise<string> {
 }
 
 export const fetchReportCardImageBase64 = async (): Promise<string> => {
-  if (typeof window === 'undefined') return '/report_card_design.png'
+  if (typeof window === 'undefined') {
+    try {
+      const fs = await import('fs')
+      const path = await import('path')
+      const localPath = path.join(process.cwd(), 'public', 'report_card_design.png')
+      if (fs.existsSync(localPath)) {
+        const buffer = fs.readFileSync(localPath)
+        return `data:image/png;base64,${buffer.toString('base64')}`
+      }
+    } catch (e) {
+      console.error('Server-side fetchReportCardImageBase64 error:', e)
+    }
+    return '/report_card_design.png'
+  }
   if (cachedReportCard) return cachedReportCard
   if (reportCardPromise) return reportCardPromise
 
@@ -43,7 +56,20 @@ export const fetchReportCardImageBase64 = async (): Promise<string> => {
 }
 
 export const fetchIdCardImageBase64 = async (): Promise<string> => {
-  if (typeof window === 'undefined') return '/id_card_design.png'
+  if (typeof window === 'undefined') {
+    try {
+      const fs = await import('fs')
+      const path = await import('path')
+      const localPath = path.join(process.cwd(), 'public', 'id_card_design.png')
+      if (fs.existsSync(localPath)) {
+        const buffer = fs.readFileSync(localPath)
+        return `data:image/png;base64,${buffer.toString('base64')}`
+      }
+    } catch (e) {
+      console.error('Server-side fetchIdCardImageBase64 error:', e)
+    }
+    return '/id_card_design.png'
+  }
   if (cachedIdCard) return cachedIdCard
   if (idCardPromise) return idCardPromise
 

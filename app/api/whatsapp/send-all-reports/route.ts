@@ -19,9 +19,10 @@ export async function POST(request: NextRequest) {
       registrations = await prisma.registration.findMany({
         where: { id: { in: registrationIds } },
         include: {
-          student: { select: { name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
+          student: { select: { id: true, name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
           event: {
             select: {
+              id: true,
               name: true,
               date: true,
               community: { select: { name: true } },
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
           },
           stallVisits: {
             include: {
-              stall: { select: { name: true, metrics: true } },
+              stall: { select: { id: true, name: true, metrics: true } },
               performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
             },
           },
@@ -40,9 +41,10 @@ export async function POST(request: NextRequest) {
       registrations = await prisma.registration.findMany({
         where: { eventId },
         include: {
-          student: { select: { name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
+          student: { select: { id: true, name: true, rollNumber: true, grade: true, age: true, parentName: true, phoneNumber: true } },
           event: {
             select: {
+              id: true,
               name: true,
               date: true,
               community: { select: { name: true } },
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
           },
           stallVisits: {
             include: {
-              stall: { select: { name: true, metrics: true } },
+              stall: { select: { id: true, name: true, metrics: true } },
               performance: { select: { score: true, grade: true, remarks: true, metricScores: true } },
             },
           },
@@ -65,71 +67,110 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No registrations found' }, { status: 404 })
     }
 
-    const { generateReportCardPdf } = await import('@/lib/report-card-pdf')
+    const batchId = eventId || 'batch-all'
+    const globalAny = global as any
+    globalAny.activeBatches = globalAny.activeBatches || {}
 
-    const results = []
-
-    for (const reg of registrations) {
-      if (!reg.student.phoneNumber) {
-        results.push({ id: reg.id, name: reg.student.name, success: false, error: 'No phone number' })
-        continue
-      }
-
-      const phone = formatPhone(reg.student.phoneNumber)
-      const totalStalls = reg.event.stalls.length
-      const visitedStalls = reg.stallVisits.filter(sv => sv.performance).length
-      const scores = reg.stallVisits.filter(sv => sv.performance).map(sv => sv.performance!.score)
-      const avgScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0
-      const grades = reg.stallVisits.filter(sv => sv.performance).map(sv => sv.performance!.grade)
-      const gradeCounts: Record<string, number> = {}
-      grades.forEach(g => { gradeCounts[g] = (gradeCounts[g] || 0) + 1 })
-      const topGrade = Object.entries(gradeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
-
-      // Generate PDF report card
-      const reportPdfBuffer = await generateReportCardPdf({
-        student: {
-          name: reg.student.name,
-          rollNumber: reg.student.rollNumber,
-          grade: reg.student.grade,
-          age: reg.student.age,
-          parentName: reg.student.parentName,
-        },
-        event: {
-          name: reg.event.name,
-          date: reg.event.date.toISOString(),
-          community: reg.event.community,
-        },
-        stallVisits: reg.stallVisits,
-        registrationCode: reg.registrationCode,
-      })
-
-      const result = await sendReportMessage(
-        phone,
-        reg.student.parentName || 'Parent',
-        reg.student.name,
-        reg.event.name,
-        totalStalls,
-        visitedStalls,
-        avgScore,
-        topGrade,
-        reg.student.rollNumber,
-        reportPdfBuffer
-      )
-
-      results.push({ id: reg.id, name: reg.student.name, ...result })
-
-      await new Promise(resolve => setTimeout(resolve, 500))
+    // Initialize/reset in-memory batch status
+    globalAny.activeBatches[batchId] = {
+      total: registrations.length,
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      status: 'processing',
+      startedAt: new Date().toISOString(),
     }
 
-    const sent = results.filter(r => r.success).length
-    const failed = results.filter(r => !r.success).length
+    // Process the loop asynchronously in the background
+    ;(async () => {
+      const { generateReportCardPdf } = await import('@/lib/report-card-pdf')
+
+      for (const reg of registrations) {
+        // Break early if job structure gets deleted or cancelled
+        if (!globalAny.activeBatches[batchId] || globalAny.activeBatches[batchId].status !== 'processing') {
+          break
+        }
+
+        try {
+          if (!reg.student.phoneNumber) {
+            globalAny.activeBatches[batchId].failed++
+            continue
+          }
+
+          const phone = formatPhone(reg.student.phoneNumber)
+          const totalStalls = reg.event.stalls.length
+          const visitedStalls = reg.stallVisits.filter(sv => sv.performance).length
+          const scores = reg.stallVisits.filter(sv => sv.performance).map(sv => sv.performance!.score)
+          const avgScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0
+          const grades = reg.stallVisits.filter(sv => sv.performance).map(sv => sv.performance!.grade)
+          const gradeCounts: Record<string, number> = {}
+          grades.forEach(g => { gradeCounts[g] = (gradeCounts[g] || 0) + 1 })
+          const topGrade = Object.entries(gradeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
+
+          // Generate PDF report card
+          const reportPdfBuffer = await generateReportCardPdf({
+            student: {
+              name: reg.student.name,
+              rollNumber: reg.student.rollNumber,
+              grade: reg.student.grade,
+              age: reg.student.age,
+              parentName: reg.student.parentName,
+            },
+            event: {
+              id: reg.event.id,
+              name: reg.event.name,
+              date: reg.event.date.toISOString(),
+              community: reg.event.community,
+              stalls: reg.event.stalls,
+            },
+            stallVisits: reg.stallVisits,
+            registrationCode: reg.registrationCode,
+          })
+
+          const result = await sendReportMessage(
+            phone,
+            reg.student.parentName || 'Parent',
+            reg.student.name,
+            reg.event.name,
+            totalStalls,
+            visitedStalls,
+            avgScore,
+            topGrade,
+            reg.student.rollNumber,
+            reportPdfBuffer,
+            reg.qrToken || reg.registrationCode,
+            { eventId: reg.eventId, studentId: reg.student.id }
+          )
+
+          if (result.success) {
+            globalAny.activeBatches[batchId].sent++
+          } else {
+            globalAny.activeBatches[batchId].failed++
+          }
+        } catch (err) {
+          console.error('[WhatsApp Batch PDF Background Error]:', err)
+          globalAny.activeBatches[batchId].failed++
+        } finally {
+          globalAny.activeBatches[batchId].processed++
+        }
+
+        // 500ms delay between dispatches
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      if (globalAny.activeBatches[batchId] && globalAny.activeBatches[batchId].status === 'processing') {
+        globalAny.activeBatches[batchId].status = 'completed'
+      }
+    })().catch(err => {
+      console.error('[WhatsApp Batch Critical Worker Failure]:', err)
+      globalAny.activeBatches[batchId].status = 'failed'
+    })
 
     return NextResponse.json({
       success: true,
-      sent,
-      failed,
-      total: results.length,
-      results,
+      batchId,
+      total: registrations.length,
+      message: 'Batch sending started in the background.'
     })
   } catch (error) {
     console.error('Send all reports error:', error instanceof Error ? error.message : 'Unknown')

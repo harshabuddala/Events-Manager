@@ -69,6 +69,8 @@ export default function EventDetailPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [bgImageBase64, setBgImageBase64] = useState<string | null>(null);
   const [idBgImageBase64, setIdBgImageBase64] = useState<string | null>(null);
+  const [activeBatch, setActiveBatch] = useState<any>(null);
+  const [showBatchToast, setShowBatchToast] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -99,6 +101,36 @@ export default function EventDetailPage() {
     fetchIdCardImageBase64().then((base64) => {
       setIdBgImageBase64(base64);
     }).catch(console.error);
+
+    // Check if there is an active running batch when entering page
+    const checkBatch = async () => {
+      try {
+        const res = await fetch(`/api/whatsapp/batch-status?eventId=${eventId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.batch && data.batch.status === 'processing') {
+            setActiveBatch(data.batch);
+            setShowBatchToast(true);
+            // Start polling
+            setTimeout(async function poll() {
+              const r = await fetch(`/api/whatsapp/batch-status?eventId=${eventId}`);
+              if (r.ok) {
+                const d = await r.json();
+                if (d.batch) {
+                  setActiveBatch(d.batch);
+                  if (d.batch.status === 'processing') {
+                    setTimeout(poll, 2000);
+                  }
+                }
+              }
+            }, 2000);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check batch status:', err);
+      }
+    }
+    checkBatch();
   }, [eventId]);
 
   const canManageEvent = userRole === 'ADMIN' || userRole === 'MANAGER';
@@ -471,7 +503,28 @@ export default function EventDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Sent: ${data.sent}, Failed: ${data.failed}, Total: ${data.total}`);
+        // Start polling status
+        setActiveBatch({
+          total: registrations.length,
+          processed: 0,
+          sent: 0,
+          failed: 0,
+          status: 'processing'
+        });
+        setShowBatchToast(true);
+        
+        setTimeout(async function poll() {
+          const r = await fetch(`/api/whatsapp/batch-status?eventId=${eventId}`);
+          if (r.ok) {
+            const d = await r.json();
+            if (d.batch) {
+              setActiveBatch(d.batch);
+              if (d.batch.status === 'processing') {
+                setTimeout(poll, 2000);
+              }
+            }
+          }
+        }, 2000);
       } else {
         alert(data.error || 'Failed to send reports');
       }
@@ -2839,6 +2892,51 @@ export default function EventDetailPage() {
         </div>
         );
       })()}
+
+      {showBatchToast && activeBatch && (
+        <div className="fixed bottom-6 right-6 z-50 w-96 bg-[#0A0F2D] border border-violet-500/30 rounded-2xl p-4 shadow-2xl shadow-violet-500/10 transition-all flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-5 text-left">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 relative">
+                {activeBatch.status === 'processing' && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${activeBatch.status === 'completed' ? 'bg-emerald-500' : 'bg-violet-500'}`}></span>
+              </span>
+              <span className="text-sm font-bold text-white">
+                {activeBatch.status === 'processing' ? 'Sending WhatsApp Reports...' : 'WhatsApp Reports Completed'}
+              </span>
+            </div>
+            
+            <button
+              onClick={() => setShowBatchToast(false)}
+              className="text-slate-400 hover:text-slate-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-slate-400 font-semibold">
+              <span>{activeBatch.processed} of {activeBatch.total} sent</span>
+              <span>{Math.round((activeBatch.processed / (activeBatch.total || 1)) * 100)}%</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-violet-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${(activeBatch.processed / (activeBatch.total || 1)) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="flex justify-between text-xs font-semibold">
+            <span className="text-emerald-400">{activeBatch.sent} successfully delivered</span>
+            {activeBatch.failed > 0 && (
+              <span className="text-rose-400">{activeBatch.failed} failed</span>
+            )}
+          </div>
+        </div>
+      )}
 
     </DashboardLayout>
   );

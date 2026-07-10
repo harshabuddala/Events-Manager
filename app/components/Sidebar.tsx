@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Calendar, Users, FileText, ShoppingBag, UserCheck, 
   BarChart3, Settings, Users2, ChevronDown, GraduationCap,
   PieChart as PieChartIcon, TrendingUp, FileOutput, X, LogOut,
-  ScanLine, ClipboardCheck, Clock, Star, HelpCircle, Smartphone, FileImage, Key, MessageCircle, CreditCard
+  ScanLine, ClipboardCheck, Clock, Star, HelpCircle, Smartphone, FileImage, Key, MessageCircle, CreditCard, GitBranch
 } from 'lucide-react';
 import QrLoginGenerator from './QrLoginGenerator';
 
@@ -51,7 +51,8 @@ const analyticsNavItems: NavItem[] = [
 const settingsNavItems: NavItem[] = [
   { path: '/settings/users', label: 'Users & Roles', icon: Users, roles: ['ADMIN', 'MANAGER'] },
   { path: '/settings/api', label: 'API', icon: Key, roles: ['ADMIN'] },
-  { path: '/settings/whatsapp', label: 'WhatsApp', icon: MessageCircle, roles: ['ADMIN'] },
+  { path: '/settings/twilio', label: 'Twilio Settings', icon: MessageCircle, roles: ['ADMIN'] },
+  { path: '/settings/whatsapp-logs', label: 'WhatsApp Logs', icon: FileOutput, roles: ['ADMIN', 'MANAGER'] },
   { path: '/settings/razorpay', label: 'Razorpay', icon: CreditCard, roles: ['ADMIN'] },
   { path: '/settings/general', label: 'Settings', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
 ];

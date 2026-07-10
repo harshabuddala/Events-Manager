@@ -182,7 +182,7 @@ export async function POST(
       for (const reg of result.registrations) {
         autoSendOnRegistration({
           student: reg.student,
-          event: { name: event.name, date: event.date, community: event.community },
+          event: { id: event.id, name: event.name, date: event.date, community: event.community },
           registrationCode: reg.registrationCode,
           qrToken: reg.qrToken || reg.registrationCode,
         }).catch(() => {})

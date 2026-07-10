@@ -62,7 +62,6 @@ enum PaymentStatus {
 }
 
 
-
 // ==================== MODELS ====================
 
 model User {
@@ -126,6 +125,7 @@ model Event {
   stalls        Stall[]
   assignments   VolunteerAssignment[]
   payments      Payment[]
+  whatsAppLogs  WhatsAppLog[]
 
   @@map("events")
 }
@@ -149,6 +149,7 @@ model Student {
   // Relations
   registrations Registration[]
   stallVisits   StallVisit[]
+  whatsAppLogs  WhatsAppLog[]
 
   @@map("students")
 }
@@ -325,20 +326,19 @@ model ApiKey {
   @@map("api_keys")
 }
 
-model WhatsAppConfig {
-  id                            String   @id @default(uuid())
-  phoneNumberId                 String
-  accessToken                   String
-  apiVersion                    String   @default("v18.0")
-  businessAccountId             String?
-  autoSendOnRegistration        Boolean  @default(false)
-  registrationMessageTemplate   String?
-  reportMessageTemplate         String?
-  isActive                      Boolean  @default(true)
-  createdAt                     DateTime @default(now())
-  updatedAt                     DateTime @updatedAt
+model TwilioConfig {
+  id                              String           @id @default(uuid())
+  accountSid                      String?
+  authToken                       String?
+  whatsAppFrom                    String?
+  autoSendOnRegistration          Boolean          @default(false)
+  registrationContentSid          String?
+  reportContentSid                String?
+  isActive                        Boolean          @default(true)
+  createdAt                       DateTime         @default(now())
+  updatedAt                       DateTime         @updatedAt
 
-  @@map("whatsapp_config")
+  @@map("twilio_config")
 }
 
 model Payment {
@@ -379,3 +379,29 @@ model RazorpayConfig {
 
   @@map("razorpay_config")
 }
+
+enum MessageStatus {
+  SUCCESS
+  FAILED
+}
+
+model WhatsAppLog {
+  id           String        @id @default(uuid())
+  eventId      String?
+  studentId    String?
+  phoneNumber  String
+  status       MessageStatus
+  messageType  String        // e.g., "REGISTRATION", "ID_CARD", "REPORT"
+  errorMessage String?
+  messageId    String?
+  createdAt    DateTime      @default(now())
+
+  event        Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  student      Student?      @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([studentId])
+  @@index([status])
+  @@map("whatsapp_logs")
+}
+

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const registration = await prisma.registration.findUnique({
       where: { id: registrationId },
       include: {
-        student: { select: { name: true, rollNumber: true, grade: true, parentName: true, phoneNumber: true } },
+        student: { select: { id: true, name: true, rollNumber: true, grade: true, parentName: true, phoneNumber: true } },
         event: { select: { id: true, name: true, date: true, community: { select: { name: true } } } },
       },
     })
@@ -68,7 +68,9 @@ export async function POST(request: NextRequest) {
       eventDate,
       registration.event.community?.name || '',
       registration.registrationCode,
-      idCardPdfBuffer
+      idCardPdfBuffer,
+      registration.qrToken || registration.registrationCode,
+      { eventId: registration.event.id, studentId: registration.student.id }
     )
 
     if (result.success) {
