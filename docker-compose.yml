@@ -68,6 +68,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Cache from previous image layers — speeds up rebuild significantly
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache
+      cache_to:
+        - type=local,dest=/tmp/.buildx-cache-new,mode=max
     restart: unless-stopped
     depends_on:
       edunura-db:

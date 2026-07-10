@@ -39,7 +39,7 @@ if [ -f "node_modules/prisma/build/index.js" ]; then
 fi
 
 echo "  → Pushing schema to database (prisma db push)..."
-if node ./node_modules/prisma/build/index.js db push --schema=./prisma/schema.prisma --skip-generate --accept-data-loss 2>&1; then
+if node ./node_modules/prisma/build/index.js db push --schema=./prisma/schema.prisma --accept-data-loss 2>&1; then
   echo "  → Schema pushed successfully!"
   MIGRATION_STATUS="success"
 else
