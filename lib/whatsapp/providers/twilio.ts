@@ -11,7 +11,7 @@ import type {
 } from '../types'
 import type { TwilioConfig } from '../config'
 
-const MEDIA_DIR = path.join(process.cwd(), 'public', 'twilio-media')
+const MEDIA_DIR = path.join(process.cwd(), 'uploads', 'twilio-media')
 const MEDIA_TTL_MS = 5 * 60 * 1000 // auto-delete uploaded media after 5 min
 
 function getPublicBaseUrl(): string {
