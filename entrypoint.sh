@@ -31,21 +31,19 @@ echo "[2/5] Running database migrations..."
 # Regenerate Prisma client at runtime to guarantee schema/client alignment.
 # This is cheap (<1s) and prevents stale client issues if the bundled client
 # was generated against an older schema.
-if [ -f "./node_modules/prisma/build/index.js" ]; then
+if [ -f "node_modules/prisma/build/index.js" ]; then
   echo "  → Regenerating Prisma client..."
-  if node ./node_modules/prisma/build/index.js generate --schema=./prisma/schema.prisma >/dev/null 2>&1; then
-    echo "  → Prisma client regenerated successfully!"
-  else
+  node ./node_modules/prisma/build/index.js generate --schema=./prisma/schema.prisma > /dev/null 2>&1 && \
+    echo "  → Prisma client regenerated successfully!" || \
     echo "  → WARNING: Prisma client regeneration failed. Continuing with bundled client."
-  fi
 fi
 
-if node ./node_modules/prisma/build/index.js migrate deploy --schema=./prisma/schema.prisma 2>&1; then
-  echo "  → Migrations applied successfully!"
+echo "  → Pushing schema to database (prisma db push)..."
+if node ./node_modules/prisma/build/index.js db push --schema=./prisma/schema.prisma --skip-generate --accept-data-loss 2>&1; then
+  echo "  → Schema pushed successfully!"
   MIGRATION_STATUS="success"
 else
-  echo "  → WARNING: Migration failed. Attempting to continue..."
-  echo "  → Check database connectivity and migration files."
+  echo "  → WARNING: Schema push failed. Attempting to continue..."
   MIGRATION_STATUS="failed"
 fi
 
