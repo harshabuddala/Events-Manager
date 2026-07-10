@@ -38,12 +38,12 @@ if [ -f "node_modules/prisma/build/index.js" ]; then
     echo "  → WARNING: Prisma client regeneration failed. Continuing with bundled client."
 fi
 
-echo "  → Pushing schema to database (prisma db push)..."
-if node ./node_modules/prisma/build/index.js db push --schema=./prisma/schema.prisma --accept-data-loss 2>&1; then
-  echo "  → Schema pushed successfully!"
+echo "  → Running database migrations (prisma migrate deploy)..."
+if node ./node_modules/prisma/build/index.js migrate deploy --schema=./prisma/schema.prisma 2>&1; then
+  echo "  → Migrations applied successfully!"
   MIGRATION_STATUS="success"
 else
-  echo "  → WARNING: Schema push failed. Attempting to continue..."
+  echo "  → WARNING: Migration deploy failed. Attempting to continue..."
   MIGRATION_STATUS="failed"
 fi
 

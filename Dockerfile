@@ -1,11 +1,10 @@
 # =============================================================================
 # Multi-stage Dockerfile for Edunura Events (Next.js 15 + Prisma)
-# Uses BuildKit cache mounts to dramatically speed up repeated builds.
+# BuildKit cache mounts used for fast repeated builds.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
 # Stage 1: Install OS deps + npm packages
-# Cache mounts keep npm packages between builds — even when package.json changes
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS deps
 RUN apk add --no-cache \
@@ -24,13 +23,13 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-# --mount=type=cache persists npm's download cache between builds on the same machine.
-# This makes the 2-minute npm ci step complete in ~15 seconds on subsequent builds.
+# BuildKit cache mount: persists npm download cache between builds
+# After the first build, npm ci goes from ~2 min → ~15 sec
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build Next.js app
+# Stage 2: Generate Prisma client + build Next.js
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS builder
 RUN apk add --no-cache \
@@ -48,11 +47,11 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
 
-# Generate Prisma client (no DB needed, uses dummy URL)
+# Generate Prisma Client (no real DB needed — dummy URL satisfies config)
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN node ./node_modules/prisma/build/index.js generate --schema=./prisma/schema.prisma
 
-# Copy app source (this layer only reruns on source code changes)
+# Copy app source after Prisma generate to maximize cache hits
 COPY next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs global.d.ts ./
 COPY app ./app/
 COPY lib ./lib/
@@ -64,8 +63,7 @@ COPY public ./public/
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Cache the Next.js build cache between builds.
-# On code changes, only the changed modules are recompiled (not the full app).
+# Next.js build cache persists between builds — only changed modules recompile
 RUN --mount=type=cache,target=/app/.next/cache \
     node ./node_modules/next/dist/bin/next build
 
