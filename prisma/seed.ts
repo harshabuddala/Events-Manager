@@ -20,36 +20,37 @@ async function main() {
   const isProduction = process.env.NODE_ENV === 'production'
   const shouldClean = process.env.SEED_CLEAN === 'true'
 
-  // Auto-detect if old stall data exists (pre-new-seed stalls like ST-001)
-  // and force-clean so the new 5 stalls are seeded.
-  const oldStall = await prisma.stall.findFirst({
-    where: { code: { notIn: ['ST-MATHS', 'ST-SCIENCE', 'ST-FITNESS', 'ST-CREATIVE', 'ST-ENGLISH'] } },
-  })
+  // WARNING: Cleaning deletes all application data. Only allowed in non-production
+  // environments and only when explicitly requested via SEED_CLEAN=true.
+  // The previous auto-detect logic that wiped data based on stall codes has been
+  // removed because it destroyed production data on every deploy.
+  if (shouldClean) {
+    if (isProduction) {
+      console.log('WARNING: SEED_CLEAN=true is not allowed in production. Skipping data cleanup.')
+    } else {
+      console.log('SEED_CLEAN=true: Cleaning existing data...')
+      await prisma.performance.deleteMany()
+      await prisma.stallVisit.deleteMany()
+      await prisma.volunteerAssignment.deleteMany()
+      await prisma.registration.deleteMany()
+      await prisma.stall.deleteMany()
+      await prisma.volunteer.deleteMany()
+      await prisma.student.deleteMany()
+      await prisma.event.deleteMany()
+      await prisma.community.deleteMany()
+      await prisma.user.deleteMany()
+      await prisma.apiKey.deleteMany()
+      console.log('Cleaned existing data')
+    }
+  }
+
+  // If default stalls already exist, there is nothing more to seed.
   const hasNewStalls = await prisma.stall.findFirst({
     where: { code: { in: ['ST-MATHS', 'ST-SCIENCE', 'ST-FITNESS', 'ST-CREATIVE', 'ST-ENGLISH'] } },
   })
 
-  if (shouldClean || oldStall) {
-    if (oldStall) {
-      console.log(`Detected old stall data (${oldStall.code}). Cleaning for fresh seed...`)
-    } else {
-      console.log('SEED_CLEAN=true: Cleaning existing data...')
-    }
-    await prisma.performance.deleteMany()
-    await prisma.stallVisit.deleteMany()
-    await prisma.volunteerAssignment.deleteMany()
-    await prisma.registration.deleteMany()
-    await prisma.stall.deleteMany()
-    await prisma.volunteer.deleteMany()
-    await prisma.student.deleteMany()
-    await prisma.event.deleteMany()
-    await prisma.community.deleteMany()
-    await prisma.user.deleteMany()
-    await prisma.apiKey.deleteMany()
-    console.log('Cleaned existing data')
-  } else if (hasNewStalls) {
-    console.log('New stalls already present. Skipping seed.')
-    console.log('To force re-seed, set SEED_CLEAN=true')
+  if (hasNewStalls) {
+    console.log('Default stalls already present. Skipping seed.')
     return
   }
 

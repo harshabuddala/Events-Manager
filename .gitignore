@@ -21,3 +21,10 @@ certificates
 
 # Test/debug scripts (moved to tests/)
 tests/
+
+# Database backups and raw PostgreSQL data (production data, do not commit)
+/_data/
+*.sql
+
+# Temporary recovery compose file (keep local only)
+recovery-docker-compose.yml
