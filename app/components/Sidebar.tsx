@@ -32,6 +32,7 @@ const mainNavItems: NavItem[] = [
   { path: '/registrations', label: 'Registrations', icon: FileText, roles: ['ADMIN', 'MANAGER'] },
   { path: '/stalls', label: 'Stalls', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER'] },
   { path: '/volunteers', label: 'Volunteers', icon: UserCheck, roles: ['ADMIN', 'MANAGER', 'VOLUNTEER', 'LEAD_EVALUATOR', 'COORDINATOR'] },
+  { path: '/dashboard/campaigns', label: 'WhatsApp Campaigns', icon: MessageCircle, roles: ['ADMIN', 'MANAGER'] },
 ];
 
 const volunteerNavItems: NavItem[] = [

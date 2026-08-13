@@ -100,6 +100,39 @@ export async function POST(req: Request) {
       await sendTextMessage(phone, "For more information about the EduNura Kids Learning Carnival, please visit our website or reply to this message with your specific questions!")
     } else if (buttonPayload === 'get_help') {
       await sendTextMessage(phone, "Our support team has been notified and will get back to you shortly. In the meantime, feel free to drop your questions here.")
+    } else if (buttonPayload === 'get_brochure' || bodyClean === 'get brochure' || buttonPayload === 'Get Brochure' || bodyClean === 'get_brochure') {
+      console.log('[Twilio Webhook] get_brochure triggered for phone:', phoneSearch)
+      
+      // Update CampaignContact if exists
+      try {
+        const contact = await prisma.campaignContact.findFirst({
+          where: { phone: { contains: phoneSearch } }
+        })
+        if (contact) {
+          await prisma.campaignContact.update({
+            where: { id: contact.id },
+            data: { hasResponded: true }
+          })
+          console.log('[Twilio Webhook] Updated campaign contact response status for:', phoneSearch)
+        }
+      } catch (err) {
+        console.error('[Twilio Webhook] Failed to update campaign contact:', err)
+      }
+
+      // Return TwiML with the PDF Media
+      return new NextResponse(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>
+    <Body>Here is the Edunura Kids Learning Carnival brochure!</Body>
+    <Media>https://powerlineenergysolutions.com/wp-content/uploads/2026/08/edunura_work-1-1.pdf</Media>
+  </Message>
+</Response>`,
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/xml' },
+        }
+      )
     } else {
       console.log('[Twilio Webhook] Unhandled buttonPayload:', buttonPayload, '| body:', body)
     }

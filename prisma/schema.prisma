@@ -405,3 +405,32 @@ model WhatsAppLog {
   @@map("whatsapp_logs")
 }
 
+model Campaign {
+  id           String            @id @default(uuid())
+  name         String
+  contentSid   String            // E.g., HX722ded19eef957c39d4a4b110f1e8bcd
+  status       String            @default("DRAFT") // DRAFT, RUNNING, COMPLETED
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  contacts     CampaignContact[]
+
+  @@map("campaigns")
+}
+
+model CampaignContact {
+  id           String   @id @default(uuid())
+  campaignId   String
+  name         String
+  phone        String
+  status       String   @default("PENDING") // PENDING, SENT, FAILED
+  hasResponded Boolean  @default(false)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([phone])
+  @@map("campaign_contacts")
+}

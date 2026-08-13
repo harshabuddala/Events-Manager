@@ -395,9 +395,9 @@ export default function PublicReportView({ registration, event }: PublicReportVi
                                 .map(([name, value]) => (
                                   <span
                                     key={name}
-                                    className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md"
+                                    className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md capitalize"
                                   >
-                                    {name}: <strong>{String(value)}</strong>
+                                    {name}: <strong>{String(value)}/5</strong>
                                   </span>
                                 ))}
                             </div>

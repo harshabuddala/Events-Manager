@@ -271,12 +271,14 @@ export default function ScanClientPage({
         selectedStallMetrics.every(m => m in prev)
       return sameKeys ? prev : next
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stallId, registration])
 
   const derivePreview = (m: Record<string, number>) => {
-    const values = Object.values(m).filter(v => v > 0)
+    const values = Object.values(m).filter(v => v >= 1)
     if (values.length === 0) return { score: 0, grade: '—' }
-    const score = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+    const avgStars = values.reduce((a, b) => a + b, 0) / values.length
+    const score = Math.round(avgStars * 2 * 10) / 10
     let g = 'E'
     if (score >= 9) g = 'A+'
     else if (score >= 8) g = 'A'
@@ -530,7 +532,7 @@ export default function ScanClientPage({
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="text-xs sm:text-sm font-bold text-slate-700">
-                          Star Ratings <span className="text-slate-400 font-normal">(per metric)</span>
+                          Star Ratings <span className="text-slate-400 font-normal">(1-5 per metric)</span>
                         </label>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] sm:text-xs font-extrabold text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-lg font-mono">
@@ -545,29 +547,33 @@ export default function ScanClientPage({
                         {selectedStallMetrics.map((metric) => {
                           const value = metricScores[metric] || 0
                           return (
-                            <div key={metric} className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                            <div key={metric} className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
                               <span className="text-xs sm:text-sm font-semibold text-slate-700 capitalize truncate">{metric}</span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="10"
-                                  step="1"
-                                  value={value}
-                                  onChange={(e) => {
-                                    setMetricScores(prev => ({ ...prev, [metric]: Number(e.target.value) }))
-                                    if (error) setError('')
-                                    if (success) setSuccess('')
-                                  }}
-                                  className="w-20 sm:w-24 accent-violet-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer appearance-none"
-                                />
-                                <span className="text-xs font-extrabold text-slate-600 min-w-[24px] text-center font-mono bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm">{value}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => {
+                                      setMetricScores(prev => ({ ...prev, [metric]: star }))
+                                      if (error) setError('')
+                                      if (success) setSuccess('')
+                                    }}
+                                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-all active:scale-90 ${
+                                      star <= value
+                                        ? 'bg-amber-400 text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-300 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    <Star className={`w-4 h-4 sm:w-5 sm:h-5 ${star <= value ? 'fill-white' : ''}`} />
+                                  </button>
+                                ))}
                               </div>
                             </div>
                           )
                         })}
                       </div>
-                      <p className="text-[10px] text-slate-400 font-medium">Overall score is auto-calculated as the average of all metric ratings.</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Rate each metric 1-5 stars. Overall score (out of 10) is auto-calculated.</p>
                     </div>
                   ) : (
                     <>
@@ -772,13 +778,12 @@ export default function ScanClientPage({
                                       <div key={name} className="flex items-center justify-between gap-2">
                                         <span className="text-[11px] sm:text-xs font-semibold text-slate-700 capitalize truncate">{name}</span>
                                         <div className="flex items-center gap-2 shrink-0">
-                                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                            <div
-                                              className="h-full bg-violet-500 rounded-full"
-                                              style={{ width: `${(n / 10) * 100}%` }}
-                                            />
+                                          <div className="flex items-center gap-0.5">
+                                            {[1, 2, 3, 4, 5].map((star) => (
+                                              <Star key={star} className={`w-3 h-3 ${star <= n ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} />
+                                            ))}
                                           </div>
-                                          <span className="text-[10px] font-mono text-slate-500 font-bold">{n}/10</span>
+                                          <span className="text-[10px] font-mono text-slate-500 font-bold">{n}/5</span>
                                         </div>
                                       </div>
                                     )

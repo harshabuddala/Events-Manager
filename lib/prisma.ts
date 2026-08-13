@@ -4,6 +4,7 @@ import { Pool } from 'pg'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
+  prisma2: PrismaClient | undefined
   pgPool: Pool | undefined
 }
 
@@ -28,8 +29,8 @@ function createPrismaClient() {
   })
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient()
+export const prisma = globalForPrisma.prisma2 ?? createPrismaClient()
 
-if (!globalForPrisma.prisma) {
-  globalForPrisma.prisma = prisma
+if (!globalForPrisma.prisma2) {
+  globalForPrisma.prisma2 = prisma
 }
