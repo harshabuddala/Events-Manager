@@ -212,8 +212,26 @@ export default function CampaignsPage() {
                 </tr>
               ) : filteredCampaigns.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                    No campaigns found.
+                  <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                    <p className="mb-4">No campaigns found.</p>
+                    <button
+                      onClick={async () => {
+                        const res = await fetch('/api/campaigns', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ name: 'Gymnastics Campaign', contentSid: 'HXd909c058fd34a420b04a87e8c44e15ba' })
+                        });
+                        if (res.ok) {
+                          fetchCampaigns();
+                        } else {
+                          alert('Failed to initialize default campaign');
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Initialize Default Campaign
+                    </button>
                   </td>
                 </tr>
               ) : (
