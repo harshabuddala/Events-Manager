@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(req: Request) {
   try {
-    const campaigns = await prisma.campaign.findMany({
+    let campaigns = await prisma.campaign.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
@@ -11,6 +11,19 @@ export async function GET(req: Request) {
         }
       }
     });
+
+    // Auto-create default campaign if none exist (e.g., in a fresh production DB)
+    if (campaigns.length === 0) {
+      const defaultCampaign = await prisma.campaign.create({
+        data: {
+          name: 'Gymnastics Campaign',
+          contentSid: 'HXd909c058fd34a420b04a87e8c44e15ba',
+          status: 'DRAFT'
+        }
+      });
+      campaigns = [{ ...defaultCampaign, _count: { contacts: 0 } } as any];
+    }
+
     return NextResponse.json({ campaigns });
   } catch (error) {
     console.error('[Campaign API] Error fetching campaigns:', error);
