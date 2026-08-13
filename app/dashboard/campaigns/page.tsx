@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, MoreVertical, MessageCircle, ArrowRight, Loader2, Calendar as CalendarIcon, Users } from 'lucide-react';
+import { Plus, Search, MoreVertical, MessageCircle, ArrowRight, Loader2, Calendar as CalendarIcon, Users, Download, Upload } from 'lucide-react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 
@@ -14,6 +14,7 @@ export default function CampaignsPage() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('Gymnastics Campaign');
   const [newContentSid, setNewContentSid] = useState('HXd909c058fd34a420b04a87e8c44e15ba');
 
@@ -67,6 +68,49 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleExport = () => {
+    const dataStr = JSON.stringify(campaigns, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'campaigns_export.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      
+      const res = await fetch('/api/campaigns/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        alert(`Successfully imported ${result.count} campaigns.`);
+        fetchCampaigns();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Import failed: ${err.error || 'Server error'}`);
+      }
+    } catch (err) {
+      alert('Invalid JSON file');
+    }
+    setIsImporting(false);
+    e.target.value = '';
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'RUNNING':
@@ -95,13 +139,27 @@ export default function CampaignsPage() {
       title="WhatsApp Campaigns" 
       subtitle="Manage your marketing campaigns, track analytics, and upload contacts."
       headerAction={
-        <button
-          onClick={() => setIsCreating(true)}
-          className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-md hover:shadow-lg transition-all"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Create Campaign</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+          <label className={`flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer ${isImporting ? 'opacity-50' : ''}`}>
+            {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Import</span>
+            <input type="file" accept=".json" className="hidden" onChange={handleImport} disabled={isImporting} />
+          </label>
+          <button
+            onClick={() => setIsCreating(true)}
+            className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-md hover:shadow-lg transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Create Campaign</span>
+          </button>
+        </div>
       }
     >
       {/* Controls */}
@@ -224,7 +282,8 @@ export default function CampaignsPage() {
                         if (res.ok) {
                           fetchCampaigns();
                         } else {
-                          alert('Failed to initialize default campaign');
+                          const errorData = await res.json().catch(() => ({}));
+                          alert(`Failed to initialize default campaign: ${errorData.error || 'Check server logs'}`);
                         }
                       }}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg text-sm font-semibold transition-colors"
